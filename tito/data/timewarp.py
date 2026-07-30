@@ -130,7 +130,7 @@ class LaggedTimewarp(LaggedDatasetMixin, TimewarpBase):
         self.tau = 5.0  # time in ps
         max_lag = int(max_lag / 5)  # turn a physical lag into a discrete lag
         LaggedDatasetMixin.__init__(self, max_lag=max_lag, fixed_lag=fixed_lag, 
-            transform=transform, ot_coupling=ot_coupling, **kwargs)
+            transform=transform, ot_coupling=ot_coupling) # , **kwargs)
 
     def __getitem__(self, idx):
         item = LaggedDatasetMixin.__getitem__(self, idx)
