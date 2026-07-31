@@ -73,7 +73,7 @@ def train_model(args):
         vf = velocity.PainnCondVelocity(n_features=args.n_features, model_layers=args.n_model_layers, 
                                         embedding_layers=args.n_embedding_layers, length_scale=args.length_scale,
                                         n_reduced_features=args.n_reduced_features, max_lag=args.max_lag,
-                                        cutoff=args.radial_cutoff)
+                                        cutoff=args.radius_cutoff)
         cfm = model.CFM(vf, lr=args.learning_rate)
 
     wandblogger = get_wandb_logger(args, num_workers=num_workers)
@@ -126,7 +126,7 @@ def main():
     parser.add_argument("--save_freq", type=int, default=30, help="Frequency of saving the model in minutes.")
     parser.add_argument('--num_workers', type=int, help="Number workers (GPU Training only).")
     parser.add_argument('--no_ot', action='store_true', help='Disable optimal transport')
-    parser.add_argument("--radial_cutoff", type=int, default=None, help="Specify a radial cutoff for our Graph being build within PainnCondVelocity.")
+    parser.add_argument("--radius_cutoff", type=int, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function
