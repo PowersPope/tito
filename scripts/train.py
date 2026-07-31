@@ -126,7 +126,7 @@ def main():
     parser.add_argument("--save_freq", type=int, default=30, help="Frequency of saving the model in minutes.")
     parser.add_argument('--num_workers', type=int, help="Number workers (GPU Training only).")
     parser.add_argument('--no_ot', action='store_true', help='Disable optimal transport')
-    parser.add_argument("--radius_cutoff", type=int, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
+    parser.add_argument("--radius_cutoff", type=float, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function
