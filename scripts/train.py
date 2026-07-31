@@ -72,7 +72,8 @@ def train_model(args):
         print("Creating new model ...")
         vf = velocity.PainnCondVelocity(n_features=args.n_features, model_layers=args.n_model_layers, 
                                         embedding_layers=args.n_embedding_layers, length_scale=args.length_scale,
-                                        n_reduced_features=args.n_reduced_features, max_lag=args.max_lag)
+                                        n_reduced_features=args.n_reduced_features, max_lag=args.max_lag,
+                                        cutoff=args.radial_cutoff)
         cfm = model.CFM(vf, lr=args.learning_rate)
 
     wandblogger = get_wandb_logger(args, num_workers=num_workers)
@@ -99,7 +100,7 @@ def train_model(args):
         trainer.fit(cfm, train_dataloader, val_dataloader)
 
 def main():
-    parser = argparse.ArgumentParser(description="TITO training script.")
+    parser = argparse.ArgumentParser(description="TITO training script.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('--data_set', type=str, default="mdqm9", required=False, help="Dataset options: [ala2, mdqm9, timewarp]")
     parser.add_argument("--data_path", type=str, required=False, help="Path to dataset directory.")
     parser.add_argument('--sub_sampling_strategy', type=str, default="None", required=False, help="Sub-sampling strategy: [none, indices]")
@@ -125,6 +126,7 @@ def main():
     parser.add_argument("--save_freq", type=int, default=30, help="Frequency of saving the model in minutes.")
     parser.add_argument('--num_workers', type=int, help="Number workers (GPU Training only).")
     parser.add_argument('--no_ot', action='store_true', help='Disable optimal transport')
+    parser.add_argument("--radial_cutoff", type=int, default=None, help="Specify a radial cutoff for our Graph being build within PainnCondVelocity.")
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function
