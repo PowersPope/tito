@@ -20,6 +20,7 @@ class PainnCondVelocity(device.Module):
         length_scale=10.0,
         n_reduced_features=0,
         temperature=False,
+        k=None,
     ):
         super().__init__()
         self.config = {"n_features": n_features, 
@@ -31,6 +32,7 @@ class PainnCondVelocity(device.Module):
                        "length_scale": length_scale,
                        "n_reduced_features": n_reduced_features,
                        "temperature": temperature,
+                       "k": k,
                        }
 
         self.cutoff = cutoff
@@ -69,7 +71,10 @@ class PainnCondVelocity(device.Module):
             ),
         )
 
-        self.radius_edges = graph.AddRadiusGraph(cutoff=self.cutoff)
+        if self.k is None:
+            self.radius_edges = graph.AddRadiusGraph(cutoff=self.cutoff)
+        else:
+            self.radius_edges = graph.AddKnnGraph(k=self.k)
         self.bond_edges = graph.AddBondGraph()
 
         if self.virtual_node:
