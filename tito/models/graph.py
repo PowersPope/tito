@@ -48,6 +48,20 @@ class AddRadiusGraph(AddEdges):
 
         return edge_index, edge_type
 
+class AddKnnGraph(AddEdges):
+    def __init__(self, k: int = 32, edge_type: int = 0) -> None:
+        super().__init__()
+        self.k = k
+        self.edge_type = edge_type
+
+    def get_edges(self, batch):
+        device = batch.x.device
+
+        edge_index = geom.nn.knn_graph(batch.x, k-k, batch=batch.batch)
+        edge_type = torch.ones(edge_index.shape[1], dtype=torch.long, device=device) * self.edge_type
+
+        return edge_index, edge_type
+
 
 class AddFullyConnectedGraph(AddEdges):
     def __init__(self, edge_type=1):
