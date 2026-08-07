@@ -296,7 +296,14 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         #       this virtual node to transfer condensed local information globablly
         #
         # Note:: Might make sense to include this in the K-nn graph class, as the k-nn graph info might be important right away
-        #
+        # After talking with Ben:: A sort of triangular connection between K-nn graphs may be the best approach going forward for
+        #       Virtual nodes. See notebook notes for details
+
+        # Make our virtual node and concat it (This is only for adding one singular virtual node to connect everything)
+        virtual_x = torch.zeros((batch.x.size(0), 3), dtype=batch.x.dtype, device=batch.x.device)
+        batch.x = torch.cat([batch.x, virtual_x], dim=-1)
+
+
         raise NotImplementedError("Still working on the logic for this!")
 
 
