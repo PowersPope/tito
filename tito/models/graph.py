@@ -206,7 +206,8 @@ class AddVirtualGraph(AddEdges):
         self.edge_type = edge_type
 
     def get_edges(self, batch):
-        biggest_graph = max(np.diff(batch.ptr.cpu().numpy()))
+#         biggest_graph = max(np.diff(batch.ptr.cpu().numpy())) # Andrew Note: Why would you convert this to cpu? It is already loaded on the GPU
+        biggest_graph = torch.max(batch.ptr[:, 1:] - batch.ptr[:, :-1])
         device = batch.x.device
         edge_index = geom.nn.radius_graph(
             batch.x, r=float(100), batch=batch.batch, max_num_neighbors=biggest_graph
