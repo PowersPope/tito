@@ -3,7 +3,7 @@ from warnings import warn
 # import numpy as np
 import torch
 import torch_geometric as geom
-from torch_geometric.data import Data as PyGData
+from torch_geometric.data import Batch
 from torch_scatter import scatter
 
 from tito import utils
