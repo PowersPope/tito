@@ -1,8 +1,9 @@
 from warnings import warn
 
-import numpy as np
+# import numpy as np
 import torch
 import torch_geometric as geom
+from torch_geometric.data import Data as PyGData
 from torch_scatter import scatter
 
 from tito import utils
@@ -57,7 +58,7 @@ class AddKnnGraph(AddEdges):
     def get_edges(self, batch):
         device = batch.x.device
 
-        edge_index = geom.nn.knn_graph(batch.x, k-k, batch=batch.batch)
+        edge_index = geom.nn.knn_graph(batch.x, k=self.k, batch=batch.batch)
         edge_type = torch.ones(edge_index.shape[1], dtype=torch.long, device=device) * self.edge_type
 
         return edge_index, edge_type
@@ -277,3 +278,25 @@ class AddGraph(device.Module):
 
     def forward(self, batch):
         return self.create_graph(batch)
+
+
+class AddVirtualNodeToConnectClusters(AddEdges):
+    def __init__(self) -> None:
+        super().__init__()
+
+    def add_virtual_nodes(self, batch: Batch) -> Tuple[torch.Tensor]:
+        """
+        Add a virtual node that is connecting clusters betwen each other, so that messages can be passed
+        between clusters after aggregation.
+        """
+        # Pseudo code logic --->
+        # 1. Grab 1 node from each K-nn cluster (Maybe we consider all or a center node)
+        # 2. Make a virtual node (maybe 1 maybe multiple) connect that virtual node to all clusters through that 1 node.
+        # 3. Outisde of this function in the model, we do 1 propogation of message passing through 
+        #       this virtual node to transfer condensed local information globablly
+        #
+        # Note:: Might make sense to include this in the K-nn graph class, as the k-nn graph info might be important right away
+        #
+        raise NotImplementedError("Still working on the logic for this!")
+
+
