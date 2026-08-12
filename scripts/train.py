@@ -51,11 +51,6 @@ def train_model(args):
 
     train_dataset, val_dataset = get_dataset(args)
 
-    print(train_dataset[0])
-    print(train_dataset[0]["cond"].x)
-    print(train_dataset[0]["target"].xbase)
-    print(train_dataset[0]["target"].x)
-    sys.exit()
 
     #NOTE: we are doing ot in the get_item and not in the collate function now. Collate function not used here therefore
 
@@ -80,7 +75,9 @@ def train_model(args):
         vf = velocity.PainnCondVelocity(n_features=args.n_features, model_layers=args.n_model_layers, 
                                         embedding_layers=args.n_embedding_layers, length_scale=args.length_scale,
                                         n_reduced_features=args.n_reduced_features, max_lag=args.max_lag,
-                                        cutoff=args.radius_cutoff, k=args.k)
+                                        cutoff=args.radius_cutoff, k=args.k, virtual_clusters=args.virtual_nodes,
+                                        cluster_ratio=args.cluster_ratio, k_meta=args.k_meta,
+                                        virtual_to_virtual_hop=args.virtual_virtual_hop)
         cfm = model.CFM(vf, lr=args.learning_rate)
 
     wandblogger = get_wandb_logger(args, num_workers=num_workers)
@@ -135,6 +132,10 @@ def main():
     parser.add_argument('--no_ot', action='store_true', help='Disable optimal transport')
     parser.add_argument("--radius_cutoff", type=float, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
     parser.add_argument("--k", type=int, default=None, help="K-Nearest neighbors to include, if None (default) RadiusGraph is used instead.")
+    parser.add_argument("--virtual-nodes", action="store_true", help="Train where centroids are calculated with k-nn graphs are computed around the centroids and then a sparse k-nn of clusters pass infromation between each other.")
+    parser.add_argument("--k-meta", type=int, default=3, help="Number of centoids make up the sparse subgraph in --virtual-nodes")
+    parser.add_argument("--cluster-ratio", type=float, default=0.3, help="The percentage of centroids to make given N nodes in a graph.")
+    parser.add_argument("--virtual-virtual-hop", action="store_true", help="Whether to pass information along virtual-virtual nodes in a 1-hop manner.")
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function

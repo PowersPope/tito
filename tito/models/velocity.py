@@ -7,6 +7,7 @@ from tito.models import device, graph, painn , embedding
 #from tito.models import old_embeddings
 from tito.utils import timer
 from tito.models.utils import all_centered, center_coordinates_batch
+from tito.models.virtual_embed import CentroidVirtualMsgPass
 
 class PainnCondVelocity(device.Module):
     def __init__(
@@ -22,6 +23,9 @@ class PainnCondVelocity(device.Module):
         temperature=False,
         k=None,
         virtual_clusters=False,
+        cluster_ratio=0.3,
+        k_meta=3,
+        virtual_to_virtual_hop=False,
     ):
         super().__init__()
         self.config = {"n_features": n_features, 
@@ -34,12 +38,17 @@ class PainnCondVelocity(device.Module):
                        "n_reduced_features": n_reduced_features,
                        "temperature": temperature,
                        "k": k,
-                       "virtual_clusters": virtual_clusters
+                       "virtual_clusters": virtual_clusters,
+                       "cluster_ratio": cluster_ratio,
+                       "k_meta": k_meta,
+                       "virtual_to_virtual_hop": virtual_to_virtual_hop,
                        }
         self.k = k
         self.cutoff = cutoff
         self.virtual_node = virtual_node
         self.virtual_clusters = virtual_clusters
+        self.cluster_ratio = cluster_ratio
+        self.k_meta = k_meta
 
         self.temperature = temperature
         self.embed = torch.nn.Sequential(
@@ -75,7 +84,12 @@ class PainnCondVelocity(device.Module):
         )
 
         if self.virtual_clusters:
-            self.cluster_msgpassing = graph.AddVirtualNodeToConnectClusters()
+            self.cluster_msgpassing = CentroidVirtualMsgPass(
+                    hidden_dim=n_features,
+                    k_meta=k_meta,
+                    virtual_to_virtual_hop=False,
+                    )
+            self.cluster_builder = graph.AddVirtualNodeToConnectClusters()
 
         if self.k is None:
             self.radius_edges = graph.AddRadiusGraph(cutoff=self.cutoff)
@@ -117,6 +131,32 @@ class PainnCondVelocity(device.Module):
         cond.edge_index = edge_index
         cond.edge_type = edge_type
         cond = self.embed(cond)
+
+        if self.virtual_clusters:
+            cluster_idx, centroid_pos, centroid_batch = self.cluster_builder.build_cluster_points(
+                    cond.x, cond.batch, ratio=self.cluster_ratio,
+                    )
+            # pool learned node features into clusters
+            h_cluster = scatter(
+                    cond.invariant_node_features, cluster_idx, dim=0,
+                    dim_size=centroid_pos.size(0), reduce="mean",
+                    )
+
+            # build spares knn graph between cluster centroids
+            virtual_edges = self.cluster_builder.build_meta_edges_knn(
+                    centroid_pos, centroid_batch, self.k_meta,
+                    )
+
+            # pass infromation along virtual nodes
+            cond.invariant_node_features = self.cluster_msgpassing(
+                    x=cond.invariant_node_features,
+                    pos=cond.x,
+                    h_cluster=h_cluster,
+                    virtual_edges=virtual_edges,
+                    cluster_idx=cluster_idx,
+                    batch=cond.batch,
+                    )
+
 
         corr.edge_index = edge_index
         corr.edge_type = edge_type
