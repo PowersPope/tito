@@ -1,8 +1,11 @@
 from warnings import warn
+from typing import Optional, Tuple
 
 # import numpy as np
 import torch
+from torch import Tensor
 import torch_geometric as geom
+from torch_geometric.nn import fps, knn, knn_graph
 from torch_geometric.data import Batch
 from torch_scatter import scatter
 
@@ -284,26 +287,70 @@ class AddVirtualNodeToConnectClusters(AddEdges):
     def __init__(self) -> None:
         super().__init__()
 
-    def add_virtual_nodes(self, batch: Batch) -> Tuple[torch.Tensor]:
+    def add_virtual_nodes(self, batch: Batch, ratio: float = 0.5, k: int = 3) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Add a virtual node that is connecting clusters betwen each other, so that messages can be passed
         between clusters after aggregation.
+        :param batch: Our batch of nodes
+        :param ratio: The ratio of nodes within a graph to create centroids
+        :param k: The number of connections between centroids to form our virtual edges
+
+        :return h_cluster: (N*ratio per graph, x.size(1))
+        :return virtual_edge_index: (2, E) where this is the centroid subgraph edges
+        :return cluster_idx: (N,) what cluster N_i is a part of
         """
-        # Pseudo code logic --->
-        # 1. Grab 1 node from each K-nn cluster (Maybe we consider all or a center node)
-        # 2. Make a virtual node (maybe 1 maybe multiple) connect that virtual node to all clusters through that 1 node.
-        # 3. Outisde of this function in the model, we do 1 propogation of message passing through 
-        #       this virtual node to transfer condensed local information globablly
-        #
-        # Note:: Might make sense to include this in the K-nn graph class, as the k-nn graph info might be important right away
-        # After talking with Ben:: A sort of triangular connection between K-nn graphs may be the best approach going forward for
-        #       Virtual nodes. See notebook notes for details
+        # Build centroid cluster centers and then subgraphs from centroids
+        cluster_idx, centroid_pos, centroid_batch = self.build_cluster_points(batch.x, batch.batch, ratio=ratio)
 
-        # Make our virtual node and concat it (This is only for adding one singular virtual node to connect everything)
-        virtual_x = torch.zeros((batch.x.size(0), 3), dtype=batch.x.dtype, device=batch.x.device)
-        batch.x = torch.cat([batch.x, virtual_x], dim=-1)
+        # Pool feature per cluster 
+        h_cluster = scatter(batch.x, cluster_idx, dim=0, dim_size=centroid_pos.size(0), reduce="mean")
 
+        # 3. Build k-NN graphs from the cluster centers to connect virtual points
+        virtual_edge_index = self.build_meta_edges_knn(centroid_pos, centroid_batch, k)
 
-        raise NotImplementedError("Still working on the logic for this!")
+        return h_cluster, virtual_edge_index, cluster_idx
+
+    def build_cluster_points(self, pos: Tensor, batch_idx: Optional[Tensor] = None, ratio: float) -> Tuple[Tensor, Tensor, Tensor]:
+        """
+        Perform FPS to build centroid cluster points -> Build k-NN graphs around the cluster centers
+
+        :param pos: (N, 3) xyz position graphs
+        :param batch_idx: (N,) a tensor indicating which graph N_i belongs to
+        :param ratio: The ratio of centroids from N nodes.
+
+        :return: cluster_idx (N,), centroid_pos (N*ratio, 3), centroid_batch: (N*ratio,)
+        """
+        # random_start might be played with but if False then we start with the first node of X
+        centroid_node_idx = fps(x=pos, batch=batch_idx, ratio=ratio, random_start=False)
+        centroid_pos = pos[centroid_node_idx]
+        centroid_batch = batch_idx[centroid_node_idx] if batch_idx is not None else None
+
+        # build our k-nn clusters and assign them for indexing later
+        subgraph_edge_index = knn(centroid_pos, pos, k=1, batch_x=centroid_batch, batch_y=batch_idx)
+        cluster_idx = torch.empty(pos.size(0), dtype=torch.long, device=pos.device)
+        cluster_idx[subraph_edge_index[0]] = subgraph_edge_index[1]
+        
+        return cluster_idx, cluster_pos, centroid_batch
+
+    def build_meta_edges_knn(self, centroid_pos: Tensor, centroid_batch: Optional[Tensor], k_meta: int) -> Tensor:
+        """
+        Sparse cluster-cluster adjacency via k-NN over centroids.
+        This does not guarantee triangular tesselation.
+        Though it is fast.
+        """
+        ei = knn_graph(centroid_pos, k=k_meta, batch=centroid_batch, loop=False)
+        return dedupe_undirected(ei)
+
+    def dedupe_undirected(self, edge_index: Tensor) -> Tensor:
+        """
+        Take a graph with duplicate edges (i, j) and (j, i) and collapse them
+        into a single canonical edge i < j.
+        """
+        src, dst = edge_index
+        low = torch.minimum(src, dst)
+        high = torch.maximum(src, dst)
+        stacked_lo_hi = torch.stacked([low, high], dim=0)
+        uniq = torch.unique(stacked_lo_hi, dim=-1)
+        return uniq
 
 

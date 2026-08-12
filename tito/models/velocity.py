@@ -21,6 +21,7 @@ class PainnCondVelocity(device.Module):
         n_reduced_features=0,
         temperature=False,
         k=None,
+        virtual_clusters=False,
     ):
         super().__init__()
         self.config = {"n_features": n_features, 
@@ -33,10 +34,12 @@ class PainnCondVelocity(device.Module):
                        "n_reduced_features": n_reduced_features,
                        "temperature": temperature,
                        "k": k,
+                       "virtual_clusters": virtual_clusters
                        }
-
+        self.k = k
         self.cutoff = cutoff
         self.virtual_node = virtual_node
+        self.virtual_clusters = virtual_clusters
 
         self.temperature = temperature
         self.embed = torch.nn.Sequential(
@@ -70,6 +73,9 @@ class PainnCondVelocity(device.Module):
                 n_reduced_features=n_reduced_features,
             ),
         )
+
+        if self.virtual_clusters:
+            self.cluster_msgpassing = graph.AddVirtualNodeToConnectClusters()
 
         if self.k is None:
             self.radius_edges = graph.AddRadiusGraph(cutoff=self.cutoff)

@@ -1,6 +1,7 @@
 import argparse
 from datetime import timedelta
 import os
+import sys
 
 import numpy as np
 import torch
@@ -49,6 +50,12 @@ def train_model(args):
     profiler = get_profiler(args)
 
     train_dataset, val_dataset = get_dataset(args)
+
+    print(train_dataset[0])
+    print(train_dataset[0]["cond"].x)
+    print(train_dataset[0]["target"].xbase)
+    print(train_dataset[0]["target"].x)
+    sys.exit()
 
     #NOTE: we are doing ot in the get_item and not in the collate function now. Collate function not used here therefore
 
@@ -127,7 +134,7 @@ def main():
     parser.add_argument('--num_workers', type=int, help="Number workers (GPU Training only).")
     parser.add_argument('--no_ot', action='store_true', help='Disable optimal transport')
     parser.add_argument("--radius_cutoff", type=float, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
-    parser.add_argumnet("--k", type=int, default=None, help="K-Nearest neighbors to include, if None (default) RadiusGraph is used instead.")
+    parser.add_argument("--k", type=int, default=None, help="K-Nearest neighbors to include, if None (default) RadiusGraph is used instead.")
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function
