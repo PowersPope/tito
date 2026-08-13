@@ -310,13 +310,20 @@ class AddVirtualNodeToConnectClusters(AddEdges):
 
         return h_cluster, virtual_edge_index, cluster_idx
 
-    def build_cluster_points(self, pos: Tensor, batch_idx: Optional[Tensor] = None, ratio: float=0.3) -> Tuple[Tensor, Tensor, Tensor]:
+    def build_cluster_points(
+            self, 
+            pos: Tensor, 
+            batch_idx: Optional[Tensor] = None, 
+            ratio: float=0.3,
+            get_edges: bool = False,
+            ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Perform FPS to build centroid cluster points -> Build k-NN graphs around the cluster centers
 
         :param pos: (N, 3) xyz position graphs
         :param batch_idx: (N,) a tensor indicating which graph N_i belongs to
         :param ratio: The ratio of centroids from N nodes.
+        :param get_edges: Used to only return edge_index and bond type
 
         :return: 
             cluster_idx (N,)
@@ -334,6 +341,10 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         cluster_idx = torch.empty(pos.size(0), dtype=torch.long, device=pos.device)
         cluster_idx[subgraph_edge_index[0]] = subgraph_edge_index[1]
         
+        if get_edges:
+            bond_type = torch.zeros(
+                    subgraph_edge_index.size(1), dtype=torch.long, device=pos.device)
+            return subgraph_edge_index, bond_type
         return cluster_idx, centroid_pos, centroid_batch, subgraph_edge_index
 
     def build_meta_edges_knn(self, centroid_pos: Tensor, centroid_batch: Optional[Tensor], k_meta: int) -> Tensor:
