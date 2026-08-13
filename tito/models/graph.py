@@ -318,7 +318,11 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         :param batch_idx: (N,) a tensor indicating which graph N_i belongs to
         :param ratio: The ratio of centroids from N nodes.
 
-        :return: cluster_idx (N,), centroid_pos (N*ratio, 3), centroid_batch: (N*ratio,)
+        :return: 
+            cluster_idx (N,)
+            centroid_pos (N*ratio, 3)
+            centroid_batch: (N*ratio,)
+            subgraph_edge_index: (2, E)
         """
         # random_start might be played with but if False then we start with the first node of X
         centroid_node_idx = fps(x=pos, batch=batch_idx, ratio=ratio, random_start=False)
@@ -330,7 +334,7 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         cluster_idx = torch.empty(pos.size(0), dtype=torch.long, device=pos.device)
         cluster_idx[subgraph_edge_index[0]] = subgraph_edge_index[1]
         
-        return cluster_idx, centroid_pos, centroid_batch
+        return cluster_idx, centroid_pos, centroid_batch, subgraph_edge_index
 
     def build_meta_edges_knn(self, centroid_pos: Tensor, centroid_batch: Optional[Tensor], k_meta: int) -> Tensor:
         """

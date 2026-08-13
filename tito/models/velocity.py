@@ -133,7 +133,7 @@ class PainnCondVelocity(device.Module):
         cond = self.embed(cond)
 
         if self.virtual_clusters:
-            cluster_idx, centroid_pos, centroid_batch = self.cluster_builder.build_cluster_points(
+            cluster_idx, centroid_pos, centroid_batch, _ = self.cluster_builder.build_cluster_points(
                     cond.x, cond.batch, ratio=self.cluster_ratio,
                     )
             # pool learned node features into clusters
