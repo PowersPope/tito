@@ -1,5 +1,5 @@
 from warnings import warn
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Union
 
 # import numpy as np
 import torch
@@ -287,7 +287,7 @@ class AddVirtualNodeToConnectClusters(AddEdges):
     def __init__(self) -> None:
         super().__init__()
 
-    def add_virtual_nodes(self, batch: Batch, ratio: float = 0.5, k: int = 3) -> Tuple[Tensor, Tensor, Tensor]:
+    def add_virtual_nodes(self, batch: Batch, ratio: float = 0.5, k: int = 3) -> Tuple[Tensor, Tensor, Union[Tensor,None]]:
         """
         Add a virtual node that is connecting clusters betwen each other, so that messages can be passed
         between clusters after aggregation.
@@ -310,7 +310,7 @@ class AddVirtualNodeToConnectClusters(AddEdges):
 
         return h_cluster, virtual_edge_index, cluster_idx
 
-    def build_cluster_points(self, pos: Tensor, batch_idx: Optional[Tensor] = None, ratio: float) -> Tuple[Tensor, Tensor, Tensor]:
+    def build_cluster_points(self, pos: Tensor, batch_idx: Optional[Tensor] = None, ratio: float=0.3) -> Tuple[Tensor, Tensor, Tensor]:
         """
         Perform FPS to build centroid cluster points -> Build k-NN graphs around the cluster centers
 
@@ -328,9 +328,9 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         # build our k-nn clusters and assign them for indexing later
         subgraph_edge_index = knn(centroid_pos, pos, k=1, batch_x=centroid_batch, batch_y=batch_idx)
         cluster_idx = torch.empty(pos.size(0), dtype=torch.long, device=pos.device)
-        cluster_idx[subraph_edge_index[0]] = subgraph_edge_index[1]
+        cluster_idx[subgraph_edge_index[0]] = subgraph_edge_index[1]
         
-        return cluster_idx, cluster_pos, centroid_batch
+        return cluster_idx, centroid_pos, centroid_batch
 
     def build_meta_edges_knn(self, centroid_pos: Tensor, centroid_batch: Optional[Tensor], k_meta: int) -> Tensor:
         """
@@ -339,7 +339,7 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         Though it is fast.
         """
         ei = knn_graph(centroid_pos, k=k_meta, batch=centroid_batch, loop=False)
-        return dedupe_undirected(ei)
+        return self.dedupe_undirected(ei)
 
     def dedupe_undirected(self, edge_index: Tensor) -> Tensor:
         """
@@ -349,7 +349,7 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         src, dst = edge_index
         low = torch.minimum(src, dst)
         high = torch.maximum(src, dst)
-        stacked_lo_hi = torch.stacked([low, high], dim=0)
+        stacked_lo_hi = torch.stack([low, high], dim=0)
         uniq = torch.unique(stacked_lo_hi, dim=-1)
         return uniq
 

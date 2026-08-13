@@ -1,5 +1,6 @@
 from typing import Optional
 
+import torch
 from torch.nn import Sequential, Linear, ReLU, Module, Sigmoid
 from torch import Tensor
 from torch_geometric.utils import scatter
@@ -32,7 +33,7 @@ class CentroidVirtualMsgPass(Module):
 
         # virtual node back to the cluster centroids
         self.virtual_to_cluster_update = Sequential(
-                Linear(k_meta-1 * hidden_dim, hidden_dim),
+                Linear(2 * hidden_dim, hidden_dim),
                 ReLU(),
                 Linear(hidden_dim, hidden_dim),
                 )
@@ -80,7 +81,7 @@ class CentroidVirtualMsgPass(Module):
             v = v + self.virtual_to_virtual_update(triangle_context)
 
         endpoints = torch.cat([src, dst])
-        v_idx = torch.cat([torch.arange(num_virtual, device=v.device)] * 2)
+        v_idx = torch.cat([torch.arange(num_virtual, device=x.device)] * 2)
         cluster_msg = scatter(
                 v[v_idx], endpoints, dim=0, dim_size=h_cluster.size(0), reduce="mean",
                 )
@@ -89,7 +90,7 @@ class CentroidVirtualMsgPass(Module):
                 )
 
         broadcast = h_cluster_new[cluster_idx]
-        gate = self.cluster_to_nodes_gate(torch.cat[x, broadcast], dim=-1)
+        gate = self.cluster_to_nodes_gate(torch.cat([x, broadcast], dim=-1))
         x_update = x + gate * broadcast
 
         return x_update
