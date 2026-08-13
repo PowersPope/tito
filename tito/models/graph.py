@@ -300,7 +300,7 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         :return cluster_idx: (N,) what cluster N_i is a part of
         """
         # Build centroid cluster centers and then subgraphs from centroids
-        cluster_idx, centroid_pos, centroid_batch = self.build_cluster_points(batch.x, batch.batch, ratio=ratio)
+        cluster_idx, centroid_pos, centroid_batch, _ = self.build_cluster_points(batch.x, batch.batch, ratio=ratio)
 
         # Pool feature per cluster 
         h_cluster = scatter(batch.x, cluster_idx, dim=0, dim_size=centroid_pos.size(0), reduce="mean")
