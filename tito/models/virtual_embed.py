@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Callable, Optional
 
 import torch
 from torch.nn import Sequential, Linear, ReLU, Module, Sigmoid
@@ -48,11 +48,10 @@ class CentroidVirtualMsgPass(Module):
     def forward(
             self, 
             x: Tensor, 
-            pos: Tensor,
             h_cluster: Tensor,
             virtual_edges: Tensor,
             cluster_idx: Tensor,
-            batch: Optional[Tensor] = None) -> Tensor:
+            logger: Optional[Callable] = None) -> Tensor:
         """
         :param x: (N, hidden_dim) node features
         :param pos: (N, 3) node positions
@@ -92,6 +91,14 @@ class CentroidVirtualMsgPass(Module):
         broadcast = h_cluster_new[cluster_idx]
         gate = self.cluster_to_nodes_gate(torch.cat([x, broadcast], dim=-1))
         x_update = x + gate * broadcast
+
+        if logger is not None:
+            logger.log_metrics(
+                    {
+                        "vnode_gate_mean": gate.mean().item(),
+                        "vnode_gate_std": gate.std().item(),
+                        }
+                    )
 
         return x_update
 

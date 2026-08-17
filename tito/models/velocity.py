@@ -116,10 +116,9 @@ class PainnCondVelocity(device.Module):
     def forward(self, t, batch, logger=None):
         corr = batch["corr"].clone()
         cond = batch["cond"].clone()
+        # We need to store our unencoded position information for the clustering
+        pos = cond.x.clone()
 
-        if self.virtual_clusters:
-            cluster_idx, centroid_pos, centroid_batch, _ = self.cluster_builder.build_cluster_points(
-                    cond.x, cond.batch, self.cluster_ratio)
         edge_index, edge_type = self.get_edge_index(corr, cond) 
 
         batch_idx = cond.batch
@@ -136,6 +135,10 @@ class PainnCondVelocity(device.Module):
         cond = self.embed(cond)
 
         if self.virtual_clusters:
+            # Cluster grab our information
+            cluster_idx, centroid_pos, centroid_batch, _ = self.cluster_builder.build_cluster_points(
+                    pos, cond.batch, self.cluster_ratio)
+
             # pool learned node features into clusters
             h_cluster = scatter(
                     cond.invariant_node_features, cluster_idx, dim=0,
@@ -150,11 +153,10 @@ class PainnCondVelocity(device.Module):
             # pass infromation along virtual nodes
             cond.invariant_node_features = self.cluster_msgpassing(
                     x=cond.invariant_node_features,
-                    pos=cond.pos,
                     h_cluster=h_cluster,
                     virtual_edges=virtual_edges,
                     cluster_idx=cluster_idx,
-                    batch=cond.batch,
+                    logger=logger,
                     )
 
         corr.edge_index = edge_index
@@ -185,14 +187,8 @@ class PainnCondVelocity(device.Module):
         return dx
 
     def get_edge_index(self, corr, cond):
-        if self.virtual_clusters:
-            cond_radius_edges, cond_radius_edge_type = self.cluster_builder.build_cluster_points(
-                    cond.x, cond.batch, self.cluster_ratio, True)
-            corr_radius_edges, corr_radius_edge_type = self.cluster_builder.build_cluster_points(
-                    corr.x, corr.batch, self.cluster_ratio, True)
-        else:
-            cond_radius_edges, cond_radius_edge_type = self.radius_edges.get_edges(cond)
-            corr_radius_edges, corr_radius_edge_type = self.radius_edges.get_edges(corr)
+        cond_radius_edges, cond_radius_edge_type = self.radius_edges.get_edges(cond)
+        corr_radius_edges, corr_radius_edge_type = self.radius_edges.get_edges(corr)
         bond_edges, bond_edge_type = self.bond_edges.get_edges(corr)
 
         edge_index = torch.cat([cond_radius_edges, corr_radius_edges, bond_edges], dim=1)
