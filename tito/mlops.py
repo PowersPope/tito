@@ -41,9 +41,11 @@ def fix_artifact_dir(artifact_dir):
     artifact_dir = new_path
     return artifact_dir
 
-def get_wandb_logger(args, num_workers=0):
+def get_wandb_logger(args, repo_root, num_workers=0):
     wandblogger = WandbLogger(
+            entity="apowers4-vanderbilt-university",
             project=f"{args.data_set}-tito",
+            job_type="retrain-tito",
             config={
                 "data_set": args.data_set,
                 "epochs": args.epochs,
@@ -61,7 +63,11 @@ def get_wandb_logger(args, num_workers=0):
                 "num_workers": num_workers,
                 "distinguish_atoms": args.distinguish_atoms,
             },
-            log_model="all",
+            settings=wandb.Settings(
+                save_code=True,
+                code_dir=str(repo_root),
+                ),
+            log_model=True,
         )
     return wandblogger
 

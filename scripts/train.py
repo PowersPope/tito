@@ -1,6 +1,7 @@
 import argparse
 from datetime import timedelta
 import os
+from pathlib import Path
 import sys
 
 import numpy as np
@@ -80,7 +81,8 @@ def train_model(args):
                                         virtual_to_virtual_hop=args.virtual_virtual_hop)
         cfm = model.CFM(vf, lr=args.learning_rate)
 
-    wandblogger = get_wandb_logger(args, num_workers=num_workers)
+    root_dir = Path(__file__).resolve().parents[1]
+    wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers)
 
     monitor = "val/loss" if not args.no_evaluate else "train/loss"
     model_callback = pl.pytorch.callbacks.ModelCheckpoint(monitor=monitor, 
