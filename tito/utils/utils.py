@@ -558,7 +558,7 @@ def get_bond_index_and_bonds(mol):
         mol = Chem.MolFromPDBFile(mol)
 
     bond_matrix = torch.tensor(
-        [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetBondType()) for bond in mol.GetBonds()],
+        [(bond.GetBeginAtomIdx(), bond.GetEndAtomIdx(), bond.GetBondType()) for bond in mol.GetBonds() if bond.GetBondType() != 21],
         dtype=torch.long,
     )
     if len(bond_matrix) == 0:

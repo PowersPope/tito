@@ -122,6 +122,7 @@ class LaggedTimewarp(LaggedDatasetMixin, TimewarpBase):
         transform=None,
         protein=None,
         ot_coupling=True,
+        sub_sampling_indices_path=None, # Andrew added this, as it breaks if it isn't added
         **kwargs,
     ):
         TimewarpBase.__init__(
@@ -134,7 +135,9 @@ class LaggedTimewarp(LaggedDatasetMixin, TimewarpBase):
 
     def __getitem__(self, idx):
         item = LaggedDatasetMixin.__getitem__(self, idx)
+        print("Lag (item):", item["lag"])
         lag = self.tau * item["lag"]
         item["lag"] = lag
+        print("Lag (tau * lag):", lag)
 
         return item
