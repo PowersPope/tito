@@ -23,7 +23,8 @@ def analyze(args):
     paths, mol_indices, missing_indices = check_and_get_paths(args)
 
     print("Analyzing molecules...")
-    for i_mol in tqdm(mol_indices):
+    for idx, i_mol in tqdm(enumerate(mol_indices)):
+        print(idx, i_mol)
         
         if args.custom_system_initial_condition:
             mol = mlops.load(paths[0])["mol"]
@@ -40,6 +41,7 @@ def analyze(args):
             md_trajs = np.expand_dims(md_trajs, axis=0) 
         dihedrals_md, sinusoids_md = compute_and_save_dihedrals_and_sinusoids(mol, md_trajs, mol_idx=i_mol, args=args, mode="md")  # mode="md" to save in md folder
         tica_models, tica_projections_md = compute_and_save_ticas(sinusoids_md, mol_idx=i_mol, args=args)
+        print("MD Generated!")
         if args.process_replica_exchange_trajectory:
             re_trajs = dataset.get_replica_exchange_traj(i_mol)
             dihedrals_re, sinusoids_re = compute_and_save_dihedrals_and_sinusoids(mol, re_trajs, mol_idx=i_mol, args=args, mode="re")
@@ -58,7 +60,7 @@ def analyze(args):
 
         # Aggregate data from different jobs with same parameters
         model_trajs = []
-        mol_paths = paths[i_mol]
+        mol_paths = paths[idx]
         for path in mol_paths:
             with open(path, "rb") as f:
                 model_trajs.append(pickle.load(f)["traj"])
