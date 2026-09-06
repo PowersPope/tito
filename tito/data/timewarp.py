@@ -9,7 +9,7 @@ from tito import utils
 from tito.data.datasets import LaggedDatasetMixin, LazyH5DatasetMixin, StandardDatasetMixin
 
 #  SCALING_FACTOR = 1 / 0.48458207
-SCALING_FACTOR = 1 / 0.277
+SCALING_FACTOR = 1 / 0.277 # THIS IS SPECIFIC FOR TIMEWARP
 
 
 class TimewarpBase(LazyH5DatasetMixin):
@@ -27,6 +27,17 @@ class TimewarpBase(LazyH5DatasetMixin):
         self.split = "train" if split is None else split
 
         self.h5file = h5py.File(self.path, "r")
+        data_group = self.h5file.get("data")
+        if data_group is not None:
+            self.frame_dt_ps = float(
+                    data_group.attrs.get("frame_dt_ps", 5.0)
+                    )
+        else:
+            self.frame_dt_ps = 5.0
+
+        if not np.isfinite(self.frame_dt_ps) or self.frame_dt_ps <= 0:
+            raise ValueError(f"Invalid HD5F frame_dt_ps: {self.frame_dt_ps}")
+
         self.normalize = normalize
         self.bond_index = {}
         self.bonds = {}
@@ -55,9 +66,12 @@ class TimewarpBase(LazyH5DatasetMixin):
 
             self.molecule_idxs.append(molecule_idx)
             self.traj_lens.append(len(traj))
-            self.lags.append(5.0)
+            self.lags.append(self.frame_dt_ps)
 
-        self.scaling_factor = SCALING_FACTOR  # type:ignore
+            self.scaling_factor = float(
+                    self.h5file["data"].attrs.get("coordinate_scale", SCALING_FACTOR)
+                                        )
+
 
         self.traj_boundaries = np.append([0], np.cumsum(self.traj_lens))
         LazyH5DatasetMixin.__init__(self, path=self.path, lazy_load=lazy_load)
@@ -125,12 +139,23 @@ class LaggedTimewarp(LaggedDatasetMixin, TimewarpBase):
         **kwargs,
     ):
         TimewarpBase.__init__(
-            self, path=path, sub_data_set=sub_data_set, split=split, normalize=normalize, lazy_load=lazy_load, protein=protein
+            self, path=path, sub_data_set=sub_data_set, 
+            split=split, normalize=normalize, lazy_load=lazy_load, protein=protein
         )
-        self.tau = 5.0  # time in ps
-        max_lag = int(max_lag / 5)  # turn a physical lag into a discrete lag
-        LaggedDatasetMixin.__init__(self, max_lag=max_lag, fixed_lag=fixed_lag, 
-            transform=transform, ot_coupling=ot_coupling) # , **kwargs)
+        self.tau = self.frame_dt_ps
+
+        max_lag_frames = int(np.floor(float(max_lag) / self.frame_dt_ps))
+
+        if max_lag_frames < 1:
+            raise ValueError(
+                    f"max_lag={max_lag:g} ps is shorter than one dataset "
+                    f"frame ({self.frame_dt_ps:g} ps)"
+                    )
+#         self.tau = 5.0  # time in ps
+#         max_lag = int(max_lag / 5)  # turn a physical lag into a discrete lag
+        LaggedDatasetMixin.__init__(
+                self, max_lag=max_lag_frames, fixed_lag=fixed_lag, 
+                transform=transform, ot_coupling=ot_coupling) # , **kwargs)
 
     def __getitem__(self, idx):
         item = LaggedDatasetMixin.__getitem__(self, idx)
