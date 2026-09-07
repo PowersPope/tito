@@ -43,6 +43,7 @@ def fix_artifact_dir(artifact_dir):
 
 def get_wandb_logger(args, num_workers=0):
     wandblogger = WandbLogger(
+            entity="apowers4-vanderbilt-university",
             project=f"{args.data_set}-tito",
             config={
                 "data_set": args.data_set,
