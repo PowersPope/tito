@@ -76,7 +76,10 @@ def analyze(args):
             md_report_interval = 10 #ps
         else:
             md_report_interval = dataset.lags[i_mol]
+            print("MD REPORT INTERVAL:", md_report_interval)
+        print("lag:", args.lag)
         lag_factor = int(args.lag / md_report_interval)
+        print("Lag factor:", lag_factor)
         vamp_scores_ref, vamp_scores_pred, vamp_gap = compute_and_save_vamp_singular_values_and_gaps(sinusoids_md, sinusoids_tito, i_mol, args, lag_factor=lag_factor)
 
 
