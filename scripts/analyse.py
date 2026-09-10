@@ -22,11 +22,9 @@ def analyze(args):
     #Check if molecules have been sampled with specified parameters
     paths, mol_indices, missing_indices = check_and_get_paths(args)
 
-    print("paths:", paths)
-    print("Mol indices:", mol_indices)
-
     print("Analyzing molecules...")
     for idx, i_mol in tqdm(enumerate(mol_indices)):
+        print(idx, i_mol)
         
         if args.custom_system_initial_condition:
             mol = mlops.load(paths[0])["mol"]
@@ -39,19 +37,26 @@ def analyze(args):
             md_trajs = np.load(f"/proj/berzelius-2025-189/users/x_juavi/md/results/all/{system_name}/traj.npz")["positions"]  #assuming only one trajectory per custom systems
         else:
             md_trajs = dataset.get_traj(i_mol)
-
+            print("dataset:", dataset)
+            print("i mol:", i_mol)
+            print("MD TRAJS:", md_trajs.shape)
         if md_trajs.ndim == 3:
             md_trajs = np.expand_dims(md_trajs, axis=0) 
-        dihedrals_md, sinusoids_md = compute_and_save_dihedrals_and_sinusoids(mol, md_trajs, mol_idx=i_mol, args=args, mode="md")  # mode="md" to save in md folder
-        tica_models, tica_projections_md = compute_and_save_ticas(sinusoids_md, mol_idx=i_mol, args=args)
-
+        feature_trajs = []
+        for traj in range(md_trajs.size(0)):
+            print(f"traj {traj}")
+            print("md shape:", md_trajs[traj].shape)
+            dihedrals_md, sinusoids_md = compute_and_save_dihedrals_and_sinusoids(mol, md_trajs[traj], mol_idx=i_mol, args=args, mode="md")  # mode="md" to save in md folder
+            feature_trajs.append(sinusoids_md.squeeze(1))
+#         tica_models, tica_projections_md = compute_and_save_ticas(sinusoids_md, mol_idx=i_mol, args=args)
+        tica_models, tica_projections_md = compute_and_save_ticas(feature_trajs, mol_idx=i_mol, args=args)
+        print("MD Generated!")
         if args.process_replica_exchange_trajectory:
             re_trajs = dataset.get_replica_exchange_traj(i_mol)
             dihedrals_re, sinusoids_re = compute_and_save_dihedrals_and_sinusoids(mol, re_trajs, mol_idx=i_mol, args=args, mode="re")
             tica_projections_re = tica_models.transform(sinusoids_re)
             re_projections_path = f"results/{args.data_set}/{args.sub_data_set}/re/{args.split}/mol_{str(i_mol).zfill(5)}/tica_projections_re.npy"
             np.save(re_projections_path, tica_projections_re)
-
         if args.process_mdft_data:
             for mdft_ps in args.mdft_ps:
                 pre_path = paths[i_mol][0].rsplit("/", maxsplit=1)[0]
@@ -63,8 +68,6 @@ def analyze(args):
                 np.save(mdft_projections_path, tica_projections_mdft)
 
         # Aggregate data from different jobs with same parameters
-        print("I_mol:", i_mol)
-        print("Paths:", paths)
         model_trajs = []
         mol_paths = paths[idx]
         for path in mol_paths:
@@ -82,8 +85,11 @@ def analyze(args):
             md_report_interval = 10 #ps
         else:
             md_report_interval = dataset.lags[i_mol]
+            print("MD REPORT INTERVAL:", md_report_interval)
+        print("lag:", args.lag)
         lag_factor = int(args.lag / md_report_interval)
-        vamp_scores_ref, vamp_scores_pred, vamp_gap = compute_and_save_vamp_singular_values_and_gaps(sinusoids_md, sinusoids_tito, i_mol, args, lag_factor=lag_factor)
+        print("Lag factor:", lag_factor)
+#         vamp_scores_ref, vamp_scores_pred, vamp_gap = compute_and_save_vamp_singular_values_and_gaps(sinusoids_md, sinusoids_tito, i_mol, args, lag_factor=lag_factor)
 
 
 def main():
