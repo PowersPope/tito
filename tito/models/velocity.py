@@ -164,7 +164,8 @@ class PainnCondVelocity(device.Module):
         corr.invariant_node_features = cond.invariant_node_features
         corr.invariant_edge_features = cond.invariant_edge_features
         # Initialize with random equivariant features, as OT is not done for the condition only the target
-        corr.equivariant_node_features = torch.randn_like(cond.equivariant_node_features) 
+#         corr.equivariant_node_features = torch.randn_like(cond.equivariant_node_features) 
+        corr.equivariant_node_features = torch.zeros_like(cond.equivariant_node_features) 
 
         dx = corr.x + self.score(corr).equivariant_node_features.squeeze() 
         dx = center_coordinates_batch(dx, corr.batch) 
