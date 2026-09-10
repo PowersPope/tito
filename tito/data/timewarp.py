@@ -4,6 +4,7 @@ import torch
 import torch_geometric as geom
 from rdkit import Chem
 from tqdm import tqdm
+from collections import defaultdict
 
 from tito import utils
 from tito.data.datasets import LaggedDatasetMixin, LazyH5DatasetMixin, StandardDatasetMixin
@@ -25,6 +26,7 @@ class TimewarpBase(LazyH5DatasetMixin):
         self.path = path
         self.sub_data_set = sub_data_set
         self.split = "train" if split is None else split
+        self.systems_to_traj_names = defaultdict(list)
 
         self.h5file = h5py.File(self.path, "r")
         data_group = self.h5file.get("data")
@@ -32,6 +34,11 @@ class TimewarpBase(LazyH5DatasetMixin):
             self.frame_dt_ps = float(
                     data_group.attrs.get("frame_dt_ps", 5.0)
                     )
+            # For aggregating run001 - run005 for octopeptides
+            for traj_name, group in self.h5file[self.split].items():
+                system = group.attrs.get("system", traj_name.split("--")[0])
+
+                self.systems_to_traj_names[system].append(traj_name)
         else:
             self.frame_dt_ps = 5.0
 
@@ -105,16 +112,31 @@ class TimewarpBase(LazyH5DatasetMixin):
 
     def get_lag(self, molecule_idx):
         return self.lags[molecule_idx]
+
+    def get_system_trajs(self, system) -> list:
+        """
+        Take a system name and return the indepent runs associated with it
+        """
+        return [
+                torch.tensor(self.h5file[self.split][traj]["traj"][()], dtype=torch.float32)
+                for traj in self.systems_to_traj_names[system]
+                ]
+
     
     def get_traj(self, mol_idx):
         """
         Returns the trajectory for a given molecule index.
         """
         traj_name = self.traj_names[mol_idx]
-        traj = self.h5file[self.split][traj_name]["traj"][()]
+        if traj_name.startswith("opep"):
+            all_traj = self.get_system_trajs(traj_name.split("__")[0])
+            all_traj = torch.stack(all_traj)
+        else:
+            all_traj = self.h5file[self.split][traj_name]["traj"][()]
         if self.normalize:
-            traj *= self.scaling_factor
-        return torch.tensor(traj, dtype=torch.float32)
+            all_traj *= self.scaling_factor
+#         return torch.tensor(traj, dtype=torch.float32)
+        return torch.tensor(all_traj, dtype=torch.float32)
 
 
 class Timewarp(StandardDatasetMixin, TimewarpBase):

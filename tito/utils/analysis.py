@@ -145,6 +145,7 @@ def compute_and_save_dihedrals_and_sinusoids(mol, trajs, mol_idx, args, mode="md
     """
     Computes dihedrals for a given molecule and trajectory.
     """
+    print("Shape into compute_and_save_dihedrals_and_sinusoids:", trajs.shape)
     dihedral_atoms = find_dihedral_atoms(mol)
     dihedrals = get_dihedrals(trajs, dihedral_atoms)
     sinusoids = utils.get_sinusoids(dihedrals)
@@ -189,7 +190,12 @@ def compute_and_save_ticas(sinusoids, mol_idx, args):
     #following deeptime docs, but different from previous implementation
     estimator = TICA(lagtime=args.lag_tica, dim=2).fit(sinusoids) #careful with dim
     model = estimator.fetch_model()
-    projections = model.transform(sinusoids)
+    if isinstance(sinusoids, list):
+        projections = [model.transform(features) for features in sinusoids]
+        print("projectsion 0:", projections[0].shape)
+        projections = np.concatenate(projections, axis=0)
+    else:
+        projections = model.transform(sinusoids)
     
     # Save TICA model to file
     #model_path = f"results/{args.data_set}/md/{args.split}/mol_{str(mol_idx).zfill(5)}/tica_model.pkl"
