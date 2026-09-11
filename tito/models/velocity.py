@@ -113,7 +113,7 @@ class PainnCondVelocity(device.Module):
 
         return batch
 
-    def forward(self, t, batch, logger=None):
+    def forward(self, t, batch, rand_eq_node_features, logger=None):
         corr = batch["corr"].clone()
         cond = batch["cond"].clone()
         # We need to store our unencoded position information for the clustering
@@ -165,7 +165,8 @@ class PainnCondVelocity(device.Module):
         corr.invariant_edge_features = cond.invariant_edge_features
         # Initialize with random equivariant features, as OT is not done for the condition only the target
 #         corr.equivariant_node_features = torch.randn_like(cond.equivariant_node_features) 
-        corr.equivariant_node_features = torch.zeros_like(cond.equivariant_node_features) 
+#         corr.equivariant_node_features = torch.zeros_like(cond.equivariant_node_features) 
+        corr.equivariant_node_features = rand_eq_node_features
 
         dx = corr.x + self.score(corr).equivariant_node_features.squeeze() 
         dx = center_coordinates_batch(dx, corr.batch) 

@@ -40,7 +40,8 @@ class CFM(pl.pytorch.LightningModule):
 
     def _forward(self, t, batch):
         batch["t_diff"] = t
-        return self.score(t, batch)
+        rand_eq_node_feats = torch.randn_like(batch["corr"].equivariant_node_features)
+        return self.score(t, batch, rand_eq_node_feats)
 
     def get_loss(self, t, batch):
         batch['corr'] = batch['cond'].clone() # clone batch for interpolated coordinates 
