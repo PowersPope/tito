@@ -49,6 +49,7 @@ class PainnCondVelocity(device.Module):
         self.virtual_clusters = virtual_clusters
         self.cluster_ratio = cluster_ratio
         self.k_meta = k_meta
+        self.n_features = n_features
 
         self.temperature = temperature
         self.embed = torch.nn.Sequential(
@@ -102,6 +103,23 @@ class PainnCondVelocity(device.Module):
             self.virtual_edges = graph.AddVirtualGraph()
 
         self.timer = timer.Timer()
+
+#     def smooth_bounding(
+#             self,
+#             vectors: Tensor,
+#             max_norm: float,
+#             eps: float = 1e-8,
+#             ):
+#         """
+#         Bound the final vector dimension while preserving direction:
+# 
+#         :param 
+# 
+#         :return bounded_vec: (A, 3) or (A, F, 3)
+#         """
+#         norm = torch.linalg.vector_norm(vectors, dim=-1, keepdim=True)
+#         bounded_norm = max_norm * torch.tand(norm/max_norm)
+#         return vectors * (bounded_norm / norm.clamp_min(eps))
 
     def preprocess(self, batch):
         if self.virtual_node:

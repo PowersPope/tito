@@ -38,9 +38,8 @@ class CFM(pl.pytorch.LightningModule):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
         return optimizer
 
-    def _forward(self, t, batch):
+    def _forward(self, t, batch, rand_eq_node_feats):
         batch["t_diff"] = t
-        rand_eq_node_feats = torch.randn_like(batch["corr"].equivariant_node_features)
         return self.score(t, batch, rand_eq_node_feats)
 
     def get_loss(self, t, batch):
@@ -54,7 +53,8 @@ class CFM(pl.pytorch.LightningModule):
         batch['corr'].x = xt # inject interpolated coordinates into batch
         ut = self.compute_conditional_vector_field(x0, x1) # compute vector field
 
-        vt = self._forward(t, batch) # predict vector field from model
+        rand_eq_node_feats = self.sample_equivariant_features(batch)
+        vt = self._forward(t, batch, rand_eq_node_feats) # predict vector field from model
 
         norms = torch.norm(vt - ut, dim=1) # compute norm of difference between predicted and conditional vector field
         loss = torch.mean(norms**2) # mse loss
@@ -69,43 +69,87 @@ class CFM(pl.pytorch.LightningModule):
     def compute_conditional_vector_field(self, x0, x1):
         return x1 - x0
 
+    def sample_equivariant_features(self, batch):
+        cond = batch["cond"]
+        return torch.randn(cond.node_type.size(0), self.score.n_features, 3,
+                           device=cond.x.device, dtype=cond.x.dtype)
+
     def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=BaseDensity(std=1.0)):
         self.eval()
+
         with torch.no_grad():
             device = next(self.parameters()).device
-            sh = SampleHandler(self._forward)
             self.score.eval()
-            #self.score.training = False
             
             x0 = batch['corr'].x
             dt = 1.0 / ode_steps
             traj = [batch['cond'].x.clone()]
 
             for i_nested in tqdm(range(nested_samples)):
-                #print(f'Sampling nested step {i_nested+1}/{nested_samples}...')
+                rand_eq_node_feats = self.sample_equivariant_features(batch)
+                sh = SampleHandler(self._forward, rand_eq_node_feats)
+
                 for i_ode in range(ode_steps): # simple Forward Euler solver
                     #print(f'Sampling step {i_ode}...', end='\r')
-                    t = torch.Tensor([i_ode]) * dt
-                    t = t.to(device)
-                    x0 = x0 + dt*sh(t, batch)
+                    t = torch.tensor([i_ode * dt], device=device,
+                                     dtype=x0.dtype)
+                    velocity = sh(t, batch)
+                    x0 = x0 + dt * velocity
                     batch['corr'].x = x0
+
                 traj.append(x0.clone())
                 batch["cond"].x = x0.clone() # update condition with last step
-                #base_samples = torch.normal(0, 1, size=batch["cond"].x.shape)
-                #base_samples = utils.center_coordinates_batch(base_samples, batch["cond"].batch) 
-                base_samples = base_distribution.sample_as(batch["cond"].x)
-                batch["corr"].x = base_samples.clone()
-                x0 = base_samples.clone() # reset x0 to base distribution for next nested sample
+
+                if i_nested < nested_samples - 1:
+                    x0 = base_distribution.sample_as(batch["cond"].x)
+                    batch["corr"].x = x0.clone()
 
             batch["traj"] = batch["cond"].clone()
             batch["traj"].x = torch.stack(traj, dim=0) # store trajectory
             print("Done!")
             return batch
+
+#     def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=BaseDensity(std=1.0)):
+#         self.eval()
+#         with torch.no_grad():
+#             device = next(self.parameters()).device
+#             sh = SampleHandler(self._forward)
+#             self.score.eval()
+#             #self.score.training = False
+#             
+#             x0 = batch['corr'].x
+#             dt = 1.0 / ode_steps
+#             traj = [batch['cond'].x.clone()]
+# 
+#             for i_nested in tqdm(range(nested_samples)):
+#                 #print(f'Sampling nested step {i_nested+1}/{nested_samples}...')
+#                 rand_eq_node_feats = self.sample_equivariant_features(batch)
+#                 sh = SampleHandler(self._forward, rand_eq_node_feats)
+#                 for i_ode in range(ode_steps): # simple Forward Euler solver
+#                     #print(f'Sampling step {i_ode}...', end='\r')
+#                     t = torch.Tensor([i_ode]) * dt
+#                     t = t.to(device)
+#                     x0 = x0 + dt*sh(t, batch)
+#                     batch['corr'].x = x0
+#                 traj.append(x0.clone())
+#                 batch["cond"].x = x0.clone() # update condition with last step
+#                 #base_samples = torch.normal(0, 1, size=batch["cond"].x.shape)
+#                 #base_samples = utils.center_coordinates_batch(base_samples, batch["cond"].batch) 
+#                 base_samples = base_distribution.sample_as(batch["cond"].x)
+#                 batch["corr"].x = base_samples.clone()
+#                 x0 = base_samples.clone() # reset x0 to base distribution for next nested sample
+# 
+#             batch["traj"] = batch["cond"].clone()
+#             batch["traj"].x = torch.stack(traj, dim=0) # store trajectory
+#             print("Done!")
+#             return batch
     
 class SampleHandler:
-    def __init__(self, sample_forward):
+    def __init__(self, sample_forward, rand_eq_node_feats):
         self.sample_forward = sample_forward
+        self.rand_eq_node_feats = rand_eq_node_feats
 
     def __call__(self, t, batch):
-        t = t.repeat((len(torch.unique(batch['cond'].batch)), ))
-        return self.sample_forward(t, batch)
+        num_graphs = batch["cond"].num_graphs
+        graph_t = t.expand(num_graphs)
+        return self.sample_forward(graph_t, batch, self.rand_eq_node_feats)
