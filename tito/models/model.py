@@ -5,6 +5,7 @@ import lightning as pl
 
 from tito.models import utils
 from tito.data.datasets import BaseDensity
+from tito.models.loss_terms import bond_length_loss, circular_bond_angle_loss
 
 
 class CFM(pl.pytorch.LightningModule):
@@ -15,6 +16,8 @@ class CFM(pl.pytorch.LightningModule):
         self.sigma = 0.001
         self.save_hyperparameters()
         self.learning_rate = lr
+        self.lambda_bond = 1.0
+        self.lambda_angle = 1.0
         #self.__basedistribution = basedistribution
         #self.ot_coupling = ot_coupling
         #self.ot_plan = ot_plan
@@ -23,15 +26,21 @@ class CFM(pl.pytorch.LightningModule):
     def training_step(self, batch, batch_idx):
         bs = batch['cond'].num_graphs
         t = torch.rand(len(batch['cond'])).type_as(batch['cond'].x)
-        loss = self.get_loss(t, batch)
-        self.log("train/loss", loss, prog_bar=True, batch_size=bs)
+        losses = self.get_loss(t, batch)
+        self.log("train/loss", losses["loss"], prog_bar=True, batch_size=bs)
+        self.log("train/loss_flow", losses["flow"], batch_size=bs)
+        self.log("train/loss_bond", losses["bond"], batch_size=bs)
+        self.log("train/loss_angle", losses["angle"], batch_size=bs)
         return loss
     
     def validation_step(self, batch, batch_idx):
         bs = batch['cond'].num_graphs
         t = torch.rand(len(batch['cond'])).type_as(batch['cond'].x)
-        loss = self.get_loss(t, batch)
-        self.log("val/loss", loss, prog_bar=True, batch_size=bs)
+        losses = self.get_loss(t, batch)
+        self.log("valid/loss", losses["loss"], prog_bar=True, batch_size=bs)
+        self.log("valid/loss_flow", losses["flow"], batch_size=bs)
+        self.log("valid/loss_bond", losses["bond"], batch_size=bs)
+        self.log("valid/loss_angle", losses["angle"], batch_size=bs)
         return loss            
 
     def configure_optimizers(self):
@@ -44,8 +53,10 @@ class CFM(pl.pytorch.LightningModule):
 
     def get_loss(self, t, batch):
         batch['corr'] = batch['cond'].clone() # clone batch for interpolated coordinates 
+
         x0 = batch['target'].xbase #self.__basedistribution.sample_as(batch['cond']) # sample from base distribution
         x1 = batch['target'].x # set target interpolation coordinates 
+
         t_batch = t[batch['cond'].batch] # associate coordinates with sampled times
 
         xt = self.sample_conditional_pt(t_batch, x0, x1, batch=batch['cond'].batch) # compute interpolated coordinates
@@ -56,9 +67,39 @@ class CFM(pl.pytorch.LightningModule):
         rand_eq_node_feats = self.sample_equivariant_features(batch)
         vt = self._forward(t, batch, rand_eq_node_feats) # predict vector field from model
 
-        norms = torch.norm(vt - ut, dim=1) # compute norm of difference between predicted and conditional vector field
-        loss = torch.mean(norms**2) # mse loss
-        return loss
+        loss_flow = ((vt - ut).pow(2).sum(dim=-1)).mean()
+
+        x1_pred = x0 + vt
+
+        loss_bond = bond_length_loss(x1_pred, x1, batch["target"].bond_index)
+        loss_angle = circular_bond_angle_loss(x1_pred, x1, batch["target"].angle_index)
+
+        loss = (
+                loss_flow
+                + self.lambda_bond * loss_bond
+                + self.lambda_angle * loss_angle
+                )
+        return {"loss": loss, "flow": loss_flow, "bond": loss_bond, "angle": loss_angle}
+
+#     def get_loss(self, t, batch):
+#         batch['corr'] = batch['cond'].clone() # clone batch for interpolated coordinates 
+# 
+#         x0 = batch['target'].xbase #self.__basedistribution.sample_as(batch['cond']) # sample from base distribution
+#         x1 = batch['target'].x # set target interpolation coordinates 
+# 
+#         t_batch = t[batch['cond'].batch] # associate coordinates with sampled times
+# 
+#         xt = self.sample_conditional_pt(t_batch, x0, x1, batch=batch['cond'].batch) # compute interpolated coordinates
+#  
+#         batch['corr'].x = xt # inject interpolated coordinates into batch
+#         ut = self.compute_conditional_vector_field(x0, x1) # compute vector field
+# 
+#         rand_eq_node_feats = self.sample_equivariant_features(batch)
+#         vt = self._forward(t, batch, rand_eq_node_feats) # predict vector field from model
+# 
+#         norms = torch.norm(vt - ut, dim=1) # compute norm of difference between predicted and conditional vector field
+#         loss = torch.mean(norms**2) # mse loss
+#         return loss
 
     def sample_conditional_pt(self, t, x0, x1, batch):
         epsilon = torch.normal(0, 1, size=x0.shape, device=x0.device)

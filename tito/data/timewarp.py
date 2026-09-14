@@ -8,6 +8,7 @@ from collections import defaultdict
 
 from tito import utils
 from tito.data.datasets import LaggedDatasetMixin, LazyH5DatasetMixin, StandardDatasetMixin
+from tito.models.loss_terms import unique_bond_index
 
 #  SCALING_FACTOR = 1 / 0.48458207
 SCALING_FACTOR = 1 / 0.277 # THIS IS SPECIFIC FOR TIMEWARP
@@ -94,6 +95,8 @@ class TimewarpBase(LazyH5DatasetMixin):
         config_idx = index - self.traj_boundaries[traj_idx]
         traj_name = self.traj_names[traj_idx]
         config = self.h5file[self.split][traj_name]["traj"][config_idx]  # type:ignore
+        angle_index = self.build_angle_index(
+                self.bond_index[molecule_idx], len(self.atoms[molecule_idx]))
 
         x = torch.tensor(config)
         x = utils.center_coordinates(x)
@@ -101,11 +104,13 @@ class TimewarpBase(LazyH5DatasetMixin):
         if self.normalize:
             x *= self.scaling_factor
 
+
         data = geom.data.Data(
             x=x,
             node_type=self.atoms[molecule_idx],
             bond_index=self.bond_index[molecule_idx],
             bond_type=self.bonds[molecule_idx],
+            angle_index=angle_index,
             index=torch.tensor([index]),
         )
         return data
@@ -137,6 +142,38 @@ class TimewarpBase(LazyH5DatasetMixin):
             all_traj *= self.scaling_factor
 #         return torch.tensor(traj, dtype=torch.float32)
         return torch.tensor(all_traj, dtype=torch.float32)
+
+    def build_angle_index(self, bond_index, num_nodes):
+        """
+        Build the angle index, so that we can reconstruct bond angles for loss
+
+        :return bond_angle_indx: (3, number_of_angles) each column is (i,j,k)
+            with j as the central atom
+        """
+        bond_index = unique_bond_index(bond_index)
+        neighbors = [set() for _ in range(num_nodes)]
+
+        src, dst = bond_index.cpu()
+
+        for i, j in zip(src.tolist(), dst.tolist()):
+            neighbors[i].add(j)
+            neighbors[j].add(i)
+
+        triplets = []
+
+        for j, atom_neighbors in enumerate(neighbors):
+            atom_neighbors = sorted(atom_neighbors)
+
+            for left in range(len(atom_neighbors)):
+                for right in range(left + 1, len(atom_neighbors)):
+                    i = atom_neighbors[left]
+                    k = atom_neighbors[right]
+                    triplets.append((i, j, k))
+
+        if not triplets:
+            return torch.empty((3,0),dtype=torch.long)
+
+        return torch.tensor(triplets, dtype=torch.long).T.contiguous()
 
 
 class Timewarp(StandardDatasetMixin, TimewarpBase):
