@@ -84,10 +84,15 @@ def train_model(args):
     root_dir = Path(__file__).resolve().parents[1]
     wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers)
 
-    monitor = "val/loss" if not args.no_evaluate else "train/loss"
-    model_callback = pl.pytorch.callbacks.ModelCheckpoint(monitor=monitor, 
-                                                        filename=f"{args.data_set}-{{epoch:02d}}-{{step}}",
-                                                        train_time_interval=timedelta(minutes=args.save_freq))
+    monitor = "valid/loss" if not args.no_evaluate else "train/loss"
+    model_callback = pl.pytorch.callbacks.ModelCheckpoint(
+            monitor=monitor, 
+            filename=f"{args.data_set}-{{epoch:02d}}-{{step}}",
+            mode="min",
+            save_top_k=2,
+            save_last=True,
+            every_n_epochs=1,
+            )
     trainer = pl.Trainer(
         max_epochs=args.epochs,
         accelerator=DEVICE,

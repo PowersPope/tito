@@ -139,3 +139,7 @@ class EmbedGraph(device.Module):
 
     def forward(self, batch):
         return self.embedding(batch)
+
+class ResidueEmbedding(NominalEmbedding):
+    def __init__(self, n_features):
+        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=21, feature_type="node")

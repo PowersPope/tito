@@ -57,9 +57,16 @@ class TimewarpBase(LazyH5DatasetMixin):
         self.traj_names = []
         self.lags = []
 
+        self.phi_index = {}
+        self.psi_index = {}
+        self.rama_residue_type = {}
+
+
         for molecule_idx, (name, group) in enumerate(tqdm(self.h5file[self.split].items())):
             if protein and protein != name:
                 continue
+
+#             trajectory = np.asarray(group[molecule_idx]["traj"][()], dtype=np.float32)
 
             mol = Chem.MolFromMolBlock(group["mol"][()], sanitize=True, removeHs=False)
             self.mol_suppl.append(mol)
@@ -79,6 +86,14 @@ class TimewarpBase(LazyH5DatasetMixin):
             self.scaling_factor = float(
                     self.h5file["data"].attrs.get("coordinate_scale", SCALING_FACTOR)
                                         )
+
+            phi_index = torch.as_tensor(group["phi_index"][()], dtype=torch.long).T.contiguous()
+            psi_index = torch.as_tensor(group["psi_index"][()], dtype=torch.long).T.contiguous()
+            rama_residue_type = torch.as_tensor(group["rama_residue_type"][()], dtype=torch.long)
+
+            self.phi_index[molecule_idx] = phi_index
+            self.psi_index[molecule_idx] = psi_index
+            self.rama_residue_type[molecule_idx] = rama_residue_type
 
 
         self.traj_boundaries = np.append([0], np.cumsum(self.traj_lens))
@@ -111,6 +126,9 @@ class TimewarpBase(LazyH5DatasetMixin):
             bond_index=self.bond_index[molecule_idx],
             bond_type=self.bonds[molecule_idx],
             angle_index=angle_index,
+            phi_index=self.phi_index[molecule_idx],
+            psi_index=self.psi_index[molecule_idx],
+            rama_residue_type=self.rama_residue_type[molecule_idx],
             index=torch.tensor([index]),
         )
         return data

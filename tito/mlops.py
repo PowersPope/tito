@@ -67,7 +67,7 @@ def get_wandb_logger(args, repo_root, num_workers=0):
                 save_code=True,
                 code_dir=str(repo_root),
                 ),
-            log_model=True,
+            log_model="all",
         )
     return wandblogger
 

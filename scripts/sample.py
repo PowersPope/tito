@@ -1,4 +1,5 @@
 import argparse
+from tito import mlops
 import tito.models.model as model
 
 from tito.data.datasets import PDBDataset
@@ -40,11 +41,37 @@ def sample_model(args, cfm, dataset, i_mol):
         
     return out_batch
 
+def resolve_checkpoint(args):
+    if args.model_path is not None:
+        return args.model_path
+
+    project_path = f"{args.entity}/{args.project}"
+
+    try:
+        checkpoint_path = mlops.get_checkpoint(
+                project=project_path,
+                run_id=args.run_id,
+                tag=args.tag,
+                )
+    except Exception as error:
+        artifact_ref = f"{project_path}/model-{args.run_id}:{args.tag}"
+
+        raise RuntimeError(
+                f"Could not download {artifact_ref}."
+                "Verify that the training run logged a model artifact."
+                ) from error
+
+    print(f"Downloaded checkpoint to {checkpoint_path}", flush=True)
+    return checkpoint_path
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Sample from model")
-    parser.add_argument("--model_path", type=str, required=True, help="Path to the model checkpoint.")
+    parser.add_argument("--model_path", type=str, help="Path to the model checkpoint.")
     parser.add_argument("--tag", type=str, default="best", help="Model wandb tag.")
+    parser.add_argument("--entity", type=str, default="apowers4-vanderbilt-university", help="Which wandb entity.")
+    parser.add_argument("--run-id", type=str, help="W&B run ID whose model atrifact is downloaded.")
+    parser.add_argument("--project", type=str, default="octopep-tito", help="W&B project within specified entity.")
     parser.add_argument("--pdb_path", type=str, default=None, help="Path of PDB file of molecule to sample.")
     parser.add_argument("--data_set", type=str, default="mdqm9", required=False, help="Dataset options: [ala2, mdqm9, timewarp]")
     parser.add_argument("--data_path", type=str, required=False, help="Path to dataset directory.")
@@ -78,6 +105,7 @@ if __name__ == "__main__":
         dataset = PDBDataset(args.pdb_path, scaling_factor=SCALING_FACTOR)
     else:
         dataset = get_dataset(args)
+    args.model_path = resolve_checkpoint(args)
     cfm = model.CFM.load_from_checkpoint(checkpoint_path=args.model_path)
     print("Model loaded ...", flush=True)
     for i_mol in args.mol_indices:

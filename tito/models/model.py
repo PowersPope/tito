@@ -5,43 +5,50 @@ import lightning as pl
 
 from tito.models import utils
 from tito.data.datasets import BaseDensity
-from tito.models.loss_terms import bond_length_loss, circular_bond_angle_loss
+from tito.models.loss_terms import (
+        bond_length_loss, 
+        circular_bond_angle_loss,
+        circular_backbone_torsion_loss,
+        )
 
 
 class CFM(pl.pytorch.LightningModule):
-    def __init__(self, score, lr=1e-3):#, basedistribution, ot_coupling=True, ot_plan="rp"):
+    def __init__(self, score, lr=1e-3):
         super().__init__()
-        #self.save_hyperparameters(ignore=["basedistribution"])
-        self.score = score #TODO: change score to vf
+        self.score = score 
         self.sigma = 0.001
         self.save_hyperparameters()
         self.learning_rate = lr
         self.lambda_bond = 1.0
         self.lambda_angle = 1.0
-        #self.__basedistribution = basedistribution
-        #self.ot_coupling = ot_coupling
-        #self.ot_plan = ot_plan
+        self.lambda_torsion = 1.0
 
 
     def training_step(self, batch, batch_idx):
         bs = batch['cond'].num_graphs
         t = torch.rand(len(batch['cond'])).type_as(batch['cond'].x)
         losses = self.get_loss(t, batch)
-        self.log("train/loss", losses["loss"], prog_bar=True, batch_size=bs)
-        self.log("train/loss_flow", losses["flow"], batch_size=bs)
-        self.log("train/loss_bond", losses["bond"], batch_size=bs)
-        self.log("train/loss_angle", losses["angle"], batch_size=bs)
-        return loss
+        self.log("train/loss", losses["loss"], prog_bar=True, batch_size=bs, sync_dist=True)
+        self.log("train/loss_flow", losses["flow"], batch_size=bs, sync_dist=True)
+        self.log("train/loss_bond", losses["bond"], batch_size=bs, sync_dist=True)
+        self.log("train/loss_angle", losses["angle"], batch_size=bs, sync_dist=True)
+        self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
+        self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
+        self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
+        return losses
     
     def validation_step(self, batch, batch_idx):
         bs = batch['cond'].num_graphs
         t = torch.rand(len(batch['cond'])).type_as(batch['cond'].x)
         losses = self.get_loss(t, batch)
-        self.log("valid/loss", losses["loss"], prog_bar=True, batch_size=bs)
-        self.log("valid/loss_flow", losses["flow"], batch_size=bs)
-        self.log("valid/loss_bond", losses["bond"], batch_size=bs)
-        self.log("valid/loss_angle", losses["angle"], batch_size=bs)
-        return loss            
+        self.log("valid/loss", losses["loss"], prog_bar=True, on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/loss_flow", losses["flow"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/loss_bond", losses["bond"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/loss_angle", losses["angle"], batch_size=bs, sync_dist=True, on_step=False, on_epoch=True)
+        self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        return losses
 
     def configure_optimizers(self):
         optimizer = torch.optim.Adam(self.parameters(), lr=self.learning_rate)
@@ -73,33 +80,25 @@ class CFM(pl.pytorch.LightningModule):
 
         loss_bond = bond_length_loss(x1_pred, x1, batch["target"].bond_index)
         loss_angle = circular_bond_angle_loss(x1_pred, x1, batch["target"].angle_index)
+        loss_torsion, loss_phi, loss_psi = circular_backbone_torsion_loss(
+                x1_pred, x1, batch["target"].phi_index, batch["target"].psi_index,
+                )
 
         loss = (
                 loss_flow
                 + self.lambda_bond * loss_bond
                 + self.lambda_angle * loss_angle
+                + self.lambda_torsion * loss_torsion
                 )
-        return {"loss": loss, "flow": loss_flow, "bond": loss_bond, "angle": loss_angle}
+        return {"loss": loss, 
+                "flow": loss_flow, 
+                "bond": loss_bond, 
+                "angle": loss_angle,
+                "torsion": loss_torsion,
+                "phi": loss_phi,
+                "psi": loss_psi,
+                }
 
-#     def get_loss(self, t, batch):
-#         batch['corr'] = batch['cond'].clone() # clone batch for interpolated coordinates 
-# 
-#         x0 = batch['target'].xbase #self.__basedistribution.sample_as(batch['cond']) # sample from base distribution
-#         x1 = batch['target'].x # set target interpolation coordinates 
-# 
-#         t_batch = t[batch['cond'].batch] # associate coordinates with sampled times
-# 
-#         xt = self.sample_conditional_pt(t_batch, x0, x1, batch=batch['cond'].batch) # compute interpolated coordinates
-#  
-#         batch['corr'].x = xt # inject interpolated coordinates into batch
-#         ut = self.compute_conditional_vector_field(x0, x1) # compute vector field
-# 
-#         rand_eq_node_feats = self.sample_equivariant_features(batch)
-#         vt = self._forward(t, batch, rand_eq_node_feats) # predict vector field from model
-# 
-#         norms = torch.norm(vt - ut, dim=1) # compute norm of difference between predicted and conditional vector field
-#         loss = torch.mean(norms**2) # mse loss
-#         return loss
 
     def sample_conditional_pt(self, t, x0, x1, batch):
         epsilon = torch.normal(0, 1, size=x0.shape, device=x0.device)
@@ -150,40 +149,6 @@ class CFM(pl.pytorch.LightningModule):
             print("Done!")
             return batch
 
-#     def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=BaseDensity(std=1.0)):
-#         self.eval()
-#         with torch.no_grad():
-#             device = next(self.parameters()).device
-#             sh = SampleHandler(self._forward)
-#             self.score.eval()
-#             #self.score.training = False
-#             
-#             x0 = batch['corr'].x
-#             dt = 1.0 / ode_steps
-#             traj = [batch['cond'].x.clone()]
-# 
-#             for i_nested in tqdm(range(nested_samples)):
-#                 #print(f'Sampling nested step {i_nested+1}/{nested_samples}...')
-#                 rand_eq_node_feats = self.sample_equivariant_features(batch)
-#                 sh = SampleHandler(self._forward, rand_eq_node_feats)
-#                 for i_ode in range(ode_steps): # simple Forward Euler solver
-#                     #print(f'Sampling step {i_ode}...', end='\r')
-#                     t = torch.Tensor([i_ode]) * dt
-#                     t = t.to(device)
-#                     x0 = x0 + dt*sh(t, batch)
-#                     batch['corr'].x = x0
-#                 traj.append(x0.clone())
-#                 batch["cond"].x = x0.clone() # update condition with last step
-#                 #base_samples = torch.normal(0, 1, size=batch["cond"].x.shape)
-#                 #base_samples = utils.center_coordinates_batch(base_samples, batch["cond"].batch) 
-#                 base_samples = base_distribution.sample_as(batch["cond"].x)
-#                 batch["corr"].x = base_samples.clone()
-#                 x0 = base_samples.clone() # reset x0 to base distribution for next nested sample
-# 
-#             batch["traj"] = batch["cond"].clone()
-#             batch["traj"].x = torch.stack(traj, dim=0) # store trajectory
-#             print("Done!")
-#             return batch
     
 class SampleHandler:
     def __init__(self, sample_forward, rand_eq_node_feats):
