@@ -56,9 +56,9 @@ class PainnCondVelocity(device.Module):
             graph.AddSpatialFeatures(),
             embedding.NodeEmbedding(n_features=n_features),
             # This is the new stuff that will be added after this training run
-#             embedding.ResidueEmbedding(n_features=n_features),
-#             embedding.ResidueRamaEmbedding(n_features=n_features),
-#             embedding.CombineInvariantFeatures(3 * n_features, n_features),
+            embedding.ResidueEmbedding(n_features=n_features),
+            embedding.ResidueRamaEmbedding(n_features=n_features),
+            embedding.CombineInvariantFeatures(3 * n_features, n_features),
             embedding.EdgeEmbedding(n_features=n_features),
             embedding.AddEquivariantFeatures(n_features=n_features),
             painn.Painn(

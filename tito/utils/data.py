@@ -6,6 +6,7 @@ import torch_geometric as geom
 from torch_geometric.data import Batch
 
 import tito.data as data
+import tito.data.octopeptide as octopepdata
 from tito.utils.utils import rdkit_to_mdtraj_topology
 import tito.mlops as mlops 
 from tito.utils.utils import sample_to_batch
@@ -16,7 +17,7 @@ def get_dataset(args):
     datasets = {
         "mdqm9": data.mdqm9.LaggedMDQM9,
         "timewarp": data.timewarp.LaggedTimewarp,
-        "octopep": data.timewarp.LaggedTimewarp,
+        "octopep": octopepdata.LaggedOctopeptide,
     }
     if args.data_set not in datasets:
         raise ValueError(f"Dataset {args.data_set} not supported. Choose from {list(datasets.keys())}.")
@@ -58,13 +59,14 @@ def get_base_dataset(args):
 #         "ala2": data.ala2.ALA2Base,
         "mdqm9": data.mdqm9.MDQM9Base,
         "timewarp": data.timewarp.TimewarpBase,
-        "octopep": data.timewarp.TimewarpBase,
+        "octopep": octopepdata.OctopeptideBase,
     }
     paths = {
         "mdqm9": "scripts/preprocessing/storage/MDQM9-nc/",
         "timewarp": "scripts/preprocessing/storage/timewarp/4AA-large/4AA-large.h5",
-        "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns.h5",
+        "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns_phipsi_noderestype.h5",
             }
+    print("MAKE SURE YOU WANT TO USE OCTOPEPTIDE_5ns.h5!!!")
     if args.data_set not in datasets:
         raise ValueError(f"Dataset {args.data_set} not supported. Choose from {list(datasets.keys())}.")
     dataset_class = datasets[args.data_set]

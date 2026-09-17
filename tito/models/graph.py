@@ -203,6 +203,28 @@ def add_virtual_node_data(data):
     data.node_type = torch.cat([data.node_type, virtual_nodes], dim=0)
     return data
 
+def add_virtual_node_data(data):
+    data = data.clone()
+    data.x = utils.center_coordinates(data.x)
+    virtual_node_x = data.x.new_zeros((1,3))
+    virtual_node_type = data.node_type.new_zeros((1,))
+    data.x = torch.cat([data.x, virtual_node_x], dim=0)
+    data.node_type = torch.cat([data.node_type, virtual_node_type], dim=0)
+
+    if hasattr(data, "node_residue_type"):
+        virtual_residue_type = data.node_residue_type.new_zeros((1,))
+        data.node_residue_type = torch.cat(
+                [data.node_residue_type, virtual_residue_type],
+                dim=0,
+                )
+    if hasattr(data, "node_rama_class"):
+        virtual_rama_class = data.node_rama_class.new_zeros((1,))
+        data.node_rama_class = torch.cat(
+                [data.node_rama_class, virtual_rama_class],
+                dim=0,
+                )
+    return data
+
 
 class AddVirtualGraph(AddEdges):
     def __init__(self, edge_type=4):

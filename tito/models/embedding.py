@@ -142,4 +142,8 @@ class EmbedGraph(device.Module):
 
 class ResidueEmbedding(NominalEmbedding):
     def __init__(self, n_features):
-        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=21, feature_type="node")
+        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=41, feature_type="node")
+
+class ResidueRamaEmbedding(NominalEmbedding):
+    def __init__(self, n_features):
+        super().__init__(feature_name="node_rama_class", n_features=n_features, n_types=41, feature_type="node")
