@@ -32,9 +32,9 @@ class CFM(pl.pytorch.LightningModule):
         self.log("train/loss_flow", losses["flow"], batch_size=bs, sync_dist=True)
         self.log("train/loss_bond", losses["bond"], batch_size=bs, sync_dist=True)
         self.log("train/loss_angle", losses["angle"], batch_size=bs, sync_dist=True)
-        self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
-        self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
-        self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
+#         self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
+#         self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
+#         self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
         return losses
     
     def validation_step(self, batch, batch_idx):
@@ -45,9 +45,9 @@ class CFM(pl.pytorch.LightningModule):
         self.log("valid/loss_flow", losses["flow"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_bond", losses["bond"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_angle", losses["angle"], batch_size=bs, sync_dist=True, on_step=False, on_epoch=True)
-        self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
-        self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
-        self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+#         self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+#         self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+#         self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         return losses
 
     def configure_optimizers(self):
@@ -80,23 +80,23 @@ class CFM(pl.pytorch.LightningModule):
 
         loss_bond = bond_length_loss(x1_pred, x1, batch["target"].bond_index)
         loss_angle = circular_bond_angle_loss(x1_pred, x1, batch["target"].angle_index)
-        loss_torsion, loss_phi, loss_psi = circular_backbone_torsion_loss(
-                x1_pred, x1, batch["target"].phi_index, batch["target"].psi_index,
-                )
+#         loss_torsion, loss_phi, loss_psi = circular_backbone_torsion_loss(
+#                 x1_pred, x1, batch["target"].phi_index, batch["target"].psi_index,
+#                 )
 
         loss = (
                 loss_flow
                 + self.lambda_bond * loss_bond
                 + self.lambda_angle * loss_angle
-                + self.lambda_torsion * loss_torsion
+#                 + self.lambda_torsion * loss_torsion
                 )
         return {"loss": loss, 
                 "flow": loss_flow, 
                 "bond": loss_bond, 
                 "angle": loss_angle,
-                "torsion": loss_torsion,
-                "phi": loss_phi,
-                "psi": loss_psi,
+#                 "torsion": loss_torsion,
+#                 "phi": loss_phi,
+#                 "psi": loss_psi,
                 }
 
 
