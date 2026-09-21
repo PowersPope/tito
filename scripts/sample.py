@@ -6,6 +6,10 @@ from tito.data.datasets import PDBDataset
 from tito.utils.data import get_dataset, get_batch, re_scale_samples, save_results, build_custom_initial_condition_batch
 from tito.data.datasets import BaseDensity
 
+import random
+import numpy as np
+import torch
+
 
 def sample_model(args, cfm, dataset, i_mol):
     """
@@ -32,7 +36,7 @@ def sample_model(args, cfm, dataset, i_mol):
     initc = {k: v.to(device) for k, v in batch.items()}  # Move to the same device as the model
     
     # Sample from the model
-    out_batch = cfm.sample(initc, ode_steps=args.ode_steps, nested_samples=args.nested_samples, base_distribution=BaseDensity(std=args.base_density_std))
+    out_batch = cfm.sample(initc, ode_steps=args.ode_steps, nested_samples=args.nested_samples, base_distribution=BaseDensity(std=args.base_density_std), solver=args.solver)
     
     # Save the samples
     if dataset.normalize:
@@ -90,8 +94,17 @@ if __name__ == "__main__":
     parser.add_argument("--i_job", type=int, default=None, help="Job index for parallel sampling, used to distinguish output files.") #consider changing default to 0 in final version
     parser.add_argument("--re_initial_condition", action="store_true", help="If set, use initial conditions from Replica Exchange simulations.")
     parser.add_argument('--base_density_std', type=float, default=1.0, help="standard deviation of the base distribution for sampling. Used for Flory exponent extrapolation experiments.") 
+    parser.add_argument("--solver", type=str, choices=["euler", "heun"], default="euler", help="ODE integration method.")
+    parser.add_argument("--sampling-seed", type=int, default=808123)
     args = parser.parse_args()
     args.fixed_lag = True
+
+    random.seed(args.sampling_seed)
+    np.random.seed(args.sampling_seed)
+    torch.manual_seed(args.sampling_seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(args.sampling_seed)
+
     args.mode = "sample"  # Set mode to sample for compatibility with dataset loading function
     if args.data_set == "ala2" or args.data_set == "mdqm9":
         args.sub_data_set = "version_0"

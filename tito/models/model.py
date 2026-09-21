@@ -13,10 +13,14 @@ from tito.models.loss_terms import (
 
 
 class CFM(pl.pytorch.LightningModule):
-    def __init__(self, score, lr=1e-3):
+    def __init__(self, score, lr=1e-3, max_velocity=None):
         super().__init__()
         self.score = score 
         self.sigma = 0.001
+#         self.max_velocity = max_velocity
+#         print("Original self.score max_velocity:", self.score.max_velocity)
+#         self.score.max_velocity = max_velocity
+#         print("Overwritten self.score max_velocity:", self.score.max_velocity)
         self.save_hyperparameters()
         self.learning_rate = lr
         self.lambda_bond = 1.0
@@ -114,8 +118,11 @@ class CFM(pl.pytorch.LightningModule):
         return torch.randn(cond.node_type.size(0), self.score.n_features, 3,
                            device=cond.x.device, dtype=cond.x.dtype)
 
-    def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=BaseDensity(std=1.0)):
+    def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=BaseDensity(std=1.0), solver="euler"):
         self.eval()
+
+        if solver not in {"euler", "heun"}:
+            raise  ValueError(f"Unkown solver {solver!r}; expected either euler or heun")
 
         with torch.no_grad():
             device = next(self.parameters()).device
@@ -133,8 +140,21 @@ class CFM(pl.pytorch.LightningModule):
                     #print(f'Sampling step {i_ode}...', end='\r')
                     t = torch.tensor([i_ode * dt], device=device,
                                      dtype=x0.dtype)
-                    velocity = sh(t, batch)
-                    x0 = x0 + dt * velocity
+                    batch["corr"].x  = x0
+
+                    if solver == "euler":
+                        velocity = sh(t, batch)
+                        x0 = x0 + dt * velocity
+
+                    else:
+                        velocity_start = sh(t, batch)
+                        x_pred = x0 + dt * velocity_start
+                        batch["corr"].x = x_pred
+
+                        t_next = torch.tensor([(i_ode + 1) *dt], device=device, dtype=x0.dtype)
+                        velocity_end = sh(t_next, batch)
+                        x0 = x0 + 0.5 * dt * (velocity_start + velocity_end)
+
                     batch['corr'].x = x0
 
                 traj.append(x0.clone())

@@ -123,7 +123,6 @@ def get_save_path(args, i_mol, i_job=None):
     """
     Get the path to save the samples.
     """
-
     model_name = args.model_path.split("/")[-1].replace(".ckpt", "")
     if args.custom_system_initial_condition:
         system_name = args.custom_system_initial_condition.split("/")[-1].split(".")[0]
@@ -132,15 +131,15 @@ def get_save_path(args, i_mol, i_job=None):
             pkl_path = f"results/custom/{system_name}/{model_name}/init_{str(args.initial_condition_index).zfill(6)}_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pkl"
             pdb_path = f"results/custom/{system_name}/{model_name}/init_{str(args.initial_condition_index).zfill(6)}_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pdb"
         else:
-            pkl_path = f"results/custom/{system_name}/{model_name}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pkl"
-            pdb_path = f"results/custom/{system_name}/{model_name}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pdb"
+            pkl_path = f"results/custom/{system_name}/{model_name}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}_solver_{args.solver}_seed_{args.sampling_seed}.pkl"
+            pdb_path = f"results/custom/{system_name}/{model_name}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}_solver_{args.solver}_seed_{args.sampling_seed}.pdb"
     else:
          if args.unique_initial_condition:
             pkl_path = f"results/{args.data_set}/{args.sub_data_set}/{model_name}/{args.split}/mol_{str(i_mol).zfill(5)}/init_{str(args.initial_condition_index).zfill(6)}_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pkl"
             pdb_path = f"results/{args.data_set}/{args.sub_data_set}/{model_name}/{args.split}/mol_{str(i_mol).zfill(5)}/init_{str(args.initial_condition_index).zfill(6)}_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pdb"
          else:
-            pkl_path = f"results/{args.data_set}/{args.sub_data_set}/{model_name}/{args.split}/mol_{str(i_mol).zfill(5)}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pkl"
-            pdb_path = f"results/{args.data_set}/{args.sub_data_set}/{model_name}/{args.split}/mol_{str(i_mol).zfill(5)}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}.pdb"
+            pkl_path = f"results/{args.data_set}/{args.sub_data_set}/{model_name}/{args.split}/mol_{str(i_mol).zfill(5)}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}_solver_{args.solver}_seed_{args.sampling_seed}.pkl"
+            pdb_path = f"results/{args.data_set}/{args.sub_data_set}/{model_name}/{args.split}/mol_{str(i_mol).zfill(5)}/random_init_lag_{int(args.lag)}_nested_{args.nested_samples}_ode_steps_{args.ode_steps}_solver_{args.solver}_seed_{args.sampling_seed}.pdb"
 
     if i_job is not None:
         pkl_path = pkl_path.replace(".pkl", f"_job_{str(i_job).zfill(3)}.pkl")

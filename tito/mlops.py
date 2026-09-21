@@ -41,7 +41,7 @@ def fix_artifact_dir(artifact_dir):
     artifact_dir = new_path
     return artifact_dir
 
-def get_wandb_logger(args, repo_root, num_workers=0):
+def get_wandb_logger(args, repo_root, num_workers=0, velocity_info={}):
     wandblogger = WandbLogger(
             entity="apowers4-vanderbilt-university",
             project=f"{args.data_set}-tito",
@@ -62,6 +62,9 @@ def get_wandb_logger(args, repo_root, num_workers=0):
                 "multigpu": args.multigpu,
                 "num_workers": num_workers,
                 "distinguish_atoms": args.distinguish_atoms,
+                "max_velocity": velocity_info["max_velocity"],
+                "quantile": velocity_info["quantile"],
+                "safety_factor": velocity_info["safety_factor"],
             },
             settings=wandb.Settings(
                 save_code=True,

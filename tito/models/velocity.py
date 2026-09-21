@@ -50,6 +50,7 @@ class PainnCondVelocity(device.Module):
         self.cluster_ratio = cluster_ratio
         self.k_meta = k_meta
         self.n_features = n_features
+#         self.max_velocity = None
 
         self.temperature = temperature
         self.embed = torch.nn.Sequential(
@@ -110,20 +111,19 @@ class PainnCondVelocity(device.Module):
 
 #     def smooth_bounding(
 #             self,
-#             vectors: Tensor,
+#             v: torch.Tensor,
 #             max_norm: float,
-#             eps: float = 1e-8,
 #             ):
 #         """
-#         Bound the final vector dimension while preserving direction:
+#         bound the final vector dimension while preserving direction:
 # 
 #         :param 
 # 
-#         :return bounded_vec: (A, 3) or (A, F, 3)
+#         :return bounded_vec: (a, 3) or (a, f, 3)
 #         """
-#         norm = torch.linalg.vector_norm(vectors, dim=-1, keepdim=True)
-#         bounded_norm = max_norm * torch.tand(norm/max_norm)
-#         return vectors * (bounded_norm / norm.clamp_min(eps))
+#         norm = torch.linalg.vector_norm(v, dim=-1, keepdim=True)
+#         bounded_norm = max_norm * torch.tanh(norm/max_norm)
+#         return v * (bounded_norm / norm.clamp_min(1e-8))
 
     def preprocess(self, batch):
         if self.virtual_node:
@@ -192,6 +192,7 @@ class PainnCondVelocity(device.Module):
 
         dx = corr.x + self.score(corr).equivariant_node_features.squeeze() 
         dx = center_coordinates_batch(dx, corr.batch) 
+#         dx = self.smooth_bounding(dx_raw, self.max_velocity)
         #print('is dx centered', all_centered(dx, corr.batch), flush=True)
         #epsilon_hat = corr.clone()
 

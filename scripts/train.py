@@ -18,6 +18,30 @@ import tito.models.velocity as velocity
 from tito.mlops import get_wandb_logger, get_profiler
 import tito.mlops as mlops 
 
+@torch.no_grad()
+def estimate_max_velocity(
+        train_loader,
+        max_quantile: float = 0.995,
+        safety_factor: float = 1.1,
+        max_batches: int = 500,
+        ):
+    speeds = []
+
+    for batch_idx, batch in enumerate(train_loader):
+        if batch_idx >= max_batches:
+            break
+
+        x0 = batch["target"].xbase
+        x1 = batch["target"].x
+
+        ut = x1 - x0
+        speed = torch.linalg.vector_norm(ut, dim=-1)
+        speeds.append(speed.cpu())
+
+    speeds = torch.cat(speeds)
+    q = torch.quantile(speeds, max_quantile).item()
+    return safety_factor * q
+
 def train_model(args):
     """
     Placeholder function for training a model.
@@ -79,10 +103,16 @@ def train_model(args):
                                         cutoff=args.radius_cutoff, k=args.k, virtual_clusters=args.virtual_nodes,
                                         cluster_ratio=args.cluster_ratio, k_meta=args.k_meta,
                                         virtual_to_virtual_hop=args.virtual_virtual_hop)
-        cfm = model.CFM(vf, lr=args.learning_rate)
+        max_velocity = estimate_max_velocity(train_dataloader)
+        cfm = model.CFM(vf, lr=args.learning_rate, max_velocity=max_velocity)
 
     root_dir = Path(__file__).resolve().parents[1]
-    wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers)
+    wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers, velocity_info={
+        "max_velocity": max_velocity,
+        "quantile": 0.995,
+        "safety_factor": 1.1,
+        })
+
 
     monitor = "valid/loss" if not args.no_evaluate else "train/loss"
     model_callback = pl.pytorch.callbacks.ModelCheckpoint(
