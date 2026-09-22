@@ -11,6 +11,7 @@ from lightning.pytorch.strategies import DDPStrategy
 from torch_geometric.loader import DataLoader as GeometricDataLoader
 
 
+from tito.models.embedding import FRAME_EDGE_TYPE
 from tito import DEVICE
 from tito.utils.data import get_dataset
 import tito.models.model as model
@@ -51,6 +52,9 @@ def train_model(args):
     profiler = get_profiler(args)
 
     train_dataset, val_dataset = get_dataset(args)
+
+    # Checking to make sure the amount is correct
+    assert train_dataset.bonds[0].max().item() < FRAME_EDGE_TYPE
 
 
     #NOTE: we are doing ot in the get_item and not in the collate function now. Collate function not used here therefore

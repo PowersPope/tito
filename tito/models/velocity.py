@@ -14,8 +14,7 @@ class PainnCondVelocity(device.Module):
         self,
         n_features=64,
         cutoff=None,
-        virtual_node=False,
-        embedding_layers=2,
+        virtual_node=False, embedding_layers=2,
         model_layers=5,
         max_lag=100,
         length_scale=10.0,
@@ -60,6 +59,7 @@ class PainnCondVelocity(device.Module):
             embedding.ResidueRamaEmbedding(n_features=n_features),
             embedding.CombineInvariantFeatures(3 * n_features, n_features),
             embedding.EdgeEmbedding(n_features=n_features),
+            embedding.RelativeResidueFrameEdgeEmbedding(n_features=n_features, coordinate_scale=length_scale)
             embedding.AddEquivariantFeatures(n_features=n_features),
             painn.Painn(
                 n_features=n_features,
@@ -215,8 +215,12 @@ class PainnCondVelocity(device.Module):
         corr_radius_edges, corr_radius_edge_type = self.radius_edges.get_edges(corr)
         bond_edges, bond_edge_type = self.bond_edges.get_edges(corr)
 
-        edge_index = torch.cat([cond_radius_edges, corr_radius_edges, bond_edges], dim=1)
-        edge_type = torch.cat([cond_radius_edge_type, corr_radius_edge_type, bond_edge_type])
+        frame_edges = cond.frame_edge_index
+        frame_edge_type = torch.full((frame_edges.shape(1),), fill_value=embedding.FRAME_EDGE_TYPE,
+                                     dtype=troch.long, device=frame_edges.device)
+
+        edge_index = torch.cat([cond_radius_edges, corr_radius_edges, bond_edges, frame_edges], dim=1)
+        edge_type = torch.cat([cond_radius_edge_type, corr_radius_edge_type, bond_edge_type, frame_edge_type])
 
         if self.virtual_node:
             virtual_edges, virtual_edge_type = self.virtual_edges.get_edges(corr)

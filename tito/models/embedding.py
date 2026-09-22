@@ -5,6 +5,49 @@ import torch
 
 from tito.models import device
 
+FRAME_EDGE_TYPE = 13
+NUM_EDGE_TYPES = 14
+
+def build_node_residue_frames(x, frame_atom_index, frame_valid):
+    """
+    Build a right-handed N-CA-C frame for every atom.
+    Atoms in the same residdue receive the same frame.
+    """
+    n_idx, ca_idx, c_idx = frame_atom_index.long()
+
+    x_n = x[n_idx]
+    x_ca = x[ca_idx]
+    x_c = x[c_idx]
+
+    # CA -> C
+    axis_1_raw = x_c - x_ca
+    axis_1_norm = torch.linalg.vector_norm(
+            axis_1_raw, dim=-1, keepdim=True,
+            )
+    axis_1 = axis_1_raw / axis_1_norm.clamp_min(1e-8)
+
+    # CA -> N
+    n_dir = x_n - x_ca
+    n_parallel = (n_dir * axis_1).sum(dim=-1, keepdim=True)
+    axis_2_raw = n_dir - n_parallel
+    axis_2_norm = torch.linalg.vector_norm(
+            axis_2_raw, dim=-1, keepdim=True,
+            )
+    axis_2 = axis_2_raw / axis_2_norm.clamp_min(1e-8)
+
+    axis_3 = torch.cross(axis_1, axis_2, dim=-1)
+    axis_3 = F.normalize(axis_3, dim=-1, eps=1e-8)
+
+    frames = torch.stack([axis_1, axis_2, axis_3], dim=-1)
+
+    geometry_valid = (
+            (axis_1_norm.squeeze(-1) > 1e-8)
+            & (axis_2_norm.squeeze(-1) > 1e-8)
+            )
+
+    valid = frame_valid.bool() & geometry_valid
+
+    return x_ca, frames, valid
 
 class MLP(device.Module):
     def __init__(self, f_in, f_hidden, f_out, skip=False):
@@ -105,7 +148,7 @@ class CombineInvariantFeatures(device.Module):
 
 class EdgeEmbedding(NominalEmbedding):
     def __init__(self, n_features):
-        super().__init__(feature_name="edge_type", n_features=n_features, n_types=13, feature_type="edge")
+        super().__init__(feature_name="edge_type", n_features=n_features, n_types=NUM_EDGE_TYPES, feature_type="edge")
 
 
 class NodeEmbedding(NominalEmbedding):
@@ -142,8 +185,63 @@ class EmbedGraph(device.Module):
 
 class ResidueEmbedding(NominalEmbedding):
     def __init__(self, n_features):
-        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=41, feature_type="node")
+        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=2, feature_type="node")
 
 class ResidueRamaEmbedding(NominalEmbedding):
     def __init__(self, n_features):
-        super().__init__(feature_name="node_rama_class", n_features=n_features, n_types=41, feature_type="node")
+        super().__init__(feature_name="node_rama_class", n_features=n_features, n_types=21, feature_type="node")
+
+class RelativeResidueFrameEdgeEmbedding(device.Module):
+    """
+    Add R_i^T R_j and local CA displacement to explict frame edges
+
+    Frame features are nonzero only for edges whose edge type is FRAME_EDGE_TYPE
+    """
+    def __init__(self, n_features, coordinate_scale=10.0):
+        super().__init__()
+
+        self.coordinate_scale = float(coordinate_scaled)
+
+        # 9 feats from R_i^T R_j
+        # 3 entries from R_i^T (Ca_j - Ca_i)
+        self.frame_mlp = MLP(f_in=12, f_hidden=n_features, f_out=n_features)
+
+    def forward(self, batch):
+        batch = batch.clone()
+
+        origins, frames, node_frame_valid = build_node_residue_frames(
+                x=batch.x,
+                frame_atom_index=batch.frame_atom_index,
+                frame_valid=batch.frame_valid,
+                )
+
+        src, dst = batch.edge_index
+
+        frame_src_t = frames[src].transpose(-1, -2)
+        frame_dst = frames[dst]
+
+        # Relative residue-frame rotation
+        relative_rotation = torch.matmul(frame_src_t, frame_dst)
+
+        # Ca_j - Ca_i represented in residue i's frame
+        origin_displacement = origins[dst] - origins[src]
+        local_displacement = torch.matmul(frame_src_t, origin_displacement.unsqueeze(-1)).squeeze(-1)
+
+        # Keep translation inputs near a convenient numerical scale
+        local_displacement = local_displacement / self.coordinate_scale
+
+        frame_features = torch.cat([relative_rotation.reshape(-1, 9), local_displacement], dim=-1)
+        is_frame_edge = batch.edge_index == FRAME_EDGE_TYPE
+
+        valid_edge = (node_frame_valid[src] & node_frame_valid[dst] & is_frame_edge)
+
+        frame_embedding = self.frame_mlp(frame_features)
+        frame_embedding = frame_embedding * valid_edge.to(batch.x.dtype).unsqueeze(-1)
+
+        batch.invariant_edge_features = batch.invariant_edge_features + frame_embedding
+
+        # Possible debug infor
+        batch.residue_frame = frames
+        batch.residue_frame_origin = origins
+
+        return batch
