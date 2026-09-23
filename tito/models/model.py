@@ -32,6 +32,7 @@ class CFM(pl.pytorch.LightningModule):
         self.log("train/loss_flow", losses["flow"], batch_size=bs, sync_dist=True)
         self.log("train/loss_bond", losses["bond"], batch_size=bs, sync_dist=True)
         self.log("train/loss_angle", losses["angle"], batch_size=bs, sync_dist=True)
+
         self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
         self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
         self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
@@ -45,6 +46,7 @@ class CFM(pl.pytorch.LightningModule):
         self.log("valid/loss_flow", losses["flow"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_bond", losses["bond"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_angle", losses["angle"], batch_size=bs, sync_dist=True, on_step=False, on_epoch=True)
+
         self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)

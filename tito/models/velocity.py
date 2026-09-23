@@ -59,7 +59,7 @@ class PainnCondVelocity(device.Module):
             embedding.ResidueRamaEmbedding(n_features=n_features),
             embedding.CombineInvariantFeatures(3 * n_features, n_features),
             embedding.EdgeEmbedding(n_features=n_features),
-            embedding.RelativeResidueFrameEdgeEmbedding(n_features=n_features, coordinate_scale=length_scale)
+            embedding.RelativeResidueFrameEdgeEmbedding(n_features=n_features, coordinate_scale=length_scale),
             embedding.AddEquivariantFeatures(n_features=n_features),
             painn.Painn(
                 n_features=n_features,
@@ -87,6 +87,12 @@ class PainnCondVelocity(device.Module):
                 n_reduced_features=n_reduced_features,
             ),
         )
+
+        self.dynamic_frame_embed = embedding.DynamicRelativeResidueFrameEdgeEmbedding(
+                n_features=n_features,
+                coordinate_scale=length_scale,
+                gate_power=2.0,
+                )
 
         if self.virtual_clusters:
             self.cluster_msgpassing = CentroidVirtualMsgPass(
@@ -190,6 +196,8 @@ class PainnCondVelocity(device.Module):
 #         corr.equivariant_node_features = torch.zeros_like(cond.equivariant_node_features) 
         corr.equivariant_node_features = rand_eq_node_features
 
+        corr = self.dynamic_frame_embed(corr)
+
         dx = corr.x + self.score(corr).equivariant_node_features.squeeze() 
         dx = center_coordinates_batch(dx, corr.batch) 
         #print('is dx centered', all_centered(dx, corr.batch), flush=True)
@@ -216,8 +224,9 @@ class PainnCondVelocity(device.Module):
         bond_edges, bond_edge_type = self.bond_edges.get_edges(corr)
 
         frame_edges = cond.frame_edge_index
-        frame_edge_type = torch.full((frame_edges.shape(1),), fill_value=embedding.FRAME_EDGE_TYPE,
-                                     dtype=troch.long, device=frame_edges.device)
+        frame_edge_type = torch.full((frame_edges.shape[1],), 
+                                     fill_value=embedding.FRAME_EDGE_TYPE,
+                                     dtype=torch.long, device=frame_edges.device)
 
         edge_index = torch.cat([cond_radius_edges, corr_radius_edges, bond_edges, frame_edges], dim=1)
         edge_type = torch.cat([cond_radius_edge_type, corr_radius_edge_type, bond_edge_type, frame_edge_type])

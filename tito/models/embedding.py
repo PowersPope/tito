@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from tito.models import device
+import torch.nn.functional as F
 
 FRAME_EDGE_TYPE = 13
 NUM_EDGE_TYPES = 14
@@ -28,7 +29,7 @@ def build_node_residue_frames(x, frame_atom_index, frame_valid):
 
     # CA -> N
     n_dir = x_n - x_ca
-    n_parallel = (n_dir * axis_1).sum(dim=-1, keepdim=True)
+    n_parallel = (n_dir * axis_1).sum(dim=-1, keepdim=True) * axis_1
     axis_2_raw = n_dir - n_parallel
     axis_2_norm = torch.linalg.vector_norm(
             axis_2_raw, dim=-1, keepdim=True,
@@ -185,11 +186,11 @@ class EmbedGraph(device.Module):
 
 class ResidueEmbedding(NominalEmbedding):
     def __init__(self, n_features):
-        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=2, feature_type="node")
+        super().__init__(feature_name="node_residue_type", n_features=n_features, n_types=21, feature_type="node")
 
 class ResidueRamaEmbedding(NominalEmbedding):
     def __init__(self, n_features):
-        super().__init__(feature_name="node_rama_class", n_features=n_features, n_types=21, feature_type="node")
+        super().__init__(feature_name="node_rama_class", n_features=n_features, n_types=2, feature_type="node")
 
 class RelativeResidueFrameEdgeEmbedding(device.Module):
     """
@@ -200,7 +201,7 @@ class RelativeResidueFrameEdgeEmbedding(device.Module):
     def __init__(self, n_features, coordinate_scale=10.0):
         super().__init__()
 
-        self.coordinate_scale = float(coordinate_scaled)
+        self.coordinate_scale = float(coordinate_scale)
 
         # 9 feats from R_i^T R_j
         # 3 entries from R_i^T (Ca_j - Ca_i)
@@ -231,7 +232,7 @@ class RelativeResidueFrameEdgeEmbedding(device.Module):
         local_displacement = local_displacement / self.coordinate_scale
 
         frame_features = torch.cat([relative_rotation.reshape(-1, 9), local_displacement], dim=-1)
-        is_frame_edge = batch.edge_index == FRAME_EDGE_TYPE
+        is_frame_edge = batch.edge_type == FRAME_EDGE_TYPE
 
         valid_edge = (node_frame_valid[src] & node_frame_valid[dst] & is_frame_edge)
 
@@ -245,3 +246,58 @@ class RelativeResidueFrameEdgeEmbedding(device.Module):
         batch.residue_frame_origin = origins
 
         return batch
+
+class DynamicRelativeResidueFrameEdgeEmbedding(device.Module):
+    def __init__(self, n_features, coordinate_scale=10.0, gate_power=2.0):
+        super().__init__()
+
+        self.coordinate_scale = float(coordinate_scale)
+        self.gate_power = float(gate_power)
+
+        self.frame_mlp = MLP(f_in=12, f_hidden=n_features, f_out=n_features)
+
+    def forward(self, batch):
+        batch = batch.clone()
+
+        origins, frames, node_frame_valid = build_node_residue_frames(
+                x=batch.x,
+                frame_atom_index=batch.frame_atom_index,
+                frame_valid=batch.frame_valid,
+                )
+
+        src, dst = batch.edge_index
+
+        frame_src_t = frames[src].transpose(-1, -2)
+        frame_dst = frames[dst]
+
+        relative_rotation = torch.matmul(frame_src_t, frame_dst)
+
+        global_displacement = origins[dst] - origins[src]
+
+        local_displacement = torch.matmul(frame_src_t, global_displacement.unsqueeze(-1)).squeeze(-1)
+
+        local_displacement = local_displacement / self.coordinate_scale
+
+        frame_features = torch.cat([relative_rotation.reshape(-1, 9), local_displacement], dim=-1)
+
+        is_frame_edge = batch.edge_type == FRAME_EDGE_TYPE
+
+        valid_edge = (
+                node_frame_valid[src]
+                & node_frame_valid[dst]
+                & is_frame_edge
+                )
+
+        dynamic_embedding = self.frame_mlp(frame_features)
+
+        edge_t = batch.t_diff[src].reshape(-1, 1)
+        edge_t = edge_t.clamp(0.0, 1.0)
+
+        gate = edge_t.pow(self.gate_power)
+
+        dynamic_embedding = dynamic_embedding * gate * valid_edge.to(batch.x.dtype).unsqueeze(-1)
+
+        batch.invariant_edge_features = batch.invariant_edge_features + dynamic_embedding
+
+        return batch
+
