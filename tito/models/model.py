@@ -10,18 +10,21 @@ from tito.models.loss_terms import (
         circular_bond_angle_loss,
         circular_backbone_torsion_loss,
         )
+from tito.models.rama import ResidueVonMisesMixture
 
 
 class CFM(pl.pytorch.LightningModule):
-    def __init__(self, score, lr=1e-3):
+    def __init__(self, score, lr=1e-3, rama_prior=None, lambda_rama=0.0):
         super().__init__()
         self.score = score 
         self.sigma = 0.001
-        self.save_hyperparameters()
+        self.save_hyperparameters(ignore=["rama_prior"])
         self.learning_rate = lr
         self.lambda_bond = 1.0
         self.lambda_angle = 1.0
         self.lambda_torsion = 0.25
+        self.lambda_rama = float(lambda_rama)
+        self.rama_prior = rama_prior
 
 
     def training_step(self, batch, batch_idx):
@@ -32,9 +35,12 @@ class CFM(pl.pytorch.LightningModule):
         self.log("train/loss_flow", losses["flow"], batch_size=bs, sync_dist=True)
         self.log("train/loss_bond", losses["bond"], batch_size=bs, sync_dist=True)
         self.log("train/loss_angle", losses["angle"], batch_size=bs, sync_dist=True)
+
         self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
         self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
         self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
+        self.log("train/loss_rama_nll", losses["rama_nll"], batch_size=bs, sync_dist=True)
+        self.log("train/rama_count", losses["rama_count"].float(), batch_size=bs, sync_dist=True)
         return losses
     
     def validation_step(self, batch, batch_idx):
@@ -45,9 +51,12 @@ class CFM(pl.pytorch.LightningModule):
         self.log("valid/loss_flow", losses["flow"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_bond", losses["bond"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_angle", losses["angle"], batch_size=bs, sync_dist=True, on_step=False, on_epoch=True)
+
         self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/loss_rama_nll", losses["rama_nll"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+        self.log("valid/rama_count", losses["rama_count"].float(), on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         return losses
 
     def configure_optimizers(self):
@@ -84,11 +93,23 @@ class CFM(pl.pytorch.LightningModule):
                 x1_pred, x1, batch["target"].phi_index, batch["target"].psi_index,
                 )
 
+        if self.rama_prior is not None and self.lambda_rama > 0.0:
+            loss_rama_nll, rama_count = self.rama_prior.nll_from_coordinates(
+                    x1_pred,
+                    batch["target"].rama_phi_index,
+                    batch["target"].rama_psi_index,
+                    batch["target"].rama_class,
+                    )
+        else:
+            loss_rama_nll = x1_pred.new_zeros(())
+            rama_count = x1_pred.new_zeros((), dtype=torch.long)
+
         loss = (
                 loss_flow
                 + self.lambda_bond * loss_bond
                 + self.lambda_angle * loss_angle
                 + self.lambda_torsion * loss_torsion
+                + self.lambda_rama * loss_rama_nll
                 )
         return {"loss": loss, 
                 "flow": loss_flow, 
@@ -97,6 +118,8 @@ class CFM(pl.pytorch.LightningModule):
                 "torsion": loss_torsion,
                 "phi": loss_phi,
                 "psi": loss_psi,
+                "rama_nll": loss_rama_nll,
+                "rama_count": rama_count,
                 }
 
 

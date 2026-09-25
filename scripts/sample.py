@@ -5,6 +5,7 @@ import tito.models.model as model
 from tito.data.datasets import PDBDataset
 from tito.utils.data import get_dataset, get_batch, re_scale_samples, save_results, build_custom_initial_condition_batch
 from tito.data.datasets import BaseDensity
+import torch
 
 
 def sample_model(args, cfm, dataset, i_mol):
@@ -106,7 +107,8 @@ if __name__ == "__main__":
     else:
         dataset = get_dataset(args)
     args.model_path = resolve_checkpoint(args)
-    cfm = model.CFM.load_from_checkpoint(checkpoint_path=args.model_path)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cfm = model.CFM.load_from_checkpoint(checkpoint_path=args.model_path, map_location=device).to(device)
     print("Model loaded ...", flush=True)
     for i_mol in args.mol_indices:
         out_batch = sample_model(args=args, cfm=cfm, dataset=dataset, i_mol=i_mol)

@@ -16,6 +16,7 @@ from tito import DEVICE
 from tito.utils.data import get_dataset
 import tito.models.model as model
 import tito.models.velocity as velocity
+from tito.models.rama import ResidueVonMisesMixture
 from tito.mlops import get_wandb_logger, get_profiler
 import tito.mlops as mlops 
 
@@ -53,6 +54,14 @@ def train_model(args):
 
     train_dataset, val_dataset = get_dataset(args)
 
+    if args.lambda_rama > 0.0 and args.rama_prior is None:
+        raise ValueError("--lambda_rama > 0 requires --rama_prior")
+    rama_prior = (
+        ResidueVonMisesMixture.from_npz(args.rama_prior)
+        if args.rama_prior is not None
+        else None
+    )
+
     # Checking to make sure the amount is correct
     assert train_dataset.bonds[0].max().item() < FRAME_EDGE_TYPE
 
@@ -72,9 +81,17 @@ def train_model(args):
     #instantiate the model
     if hasattr(args, 'from_checkpoint_id') and args.from_checkpoint_id is not None:
         print(f"Loading model from checkpoint {args.from_checkpoint_id} ...")
-        project = args.data_set + "-tito"
+#         project = args.data_set + "-tito"
+        entity = os.environ.get("WANDB_ENTITY", "apowers4-vanderbilt-university")
+        project = f"{entity}/{args.data_set}-tito"
         ckpt = mlops.get_checkpoint(project, args.from_checkpoint_id, tag=args.checkpoint_tag)
-        cfm = model.CFM.load_from_checkpoint(checkpoint_path=ckpt)
+        cfm = model.CFM.load_from_checkpoint(
+                checkpoint_path=ckpt,
+                rama_prior=rama_prior,
+                lambda_rama=args.lambda_rama,
+                )
+        # The CLI learning rate must override the value saved by the source run.
+        cfm.learning_rate = args.learning_rate
     else:
         print("Creating new model ...")
         vf = velocity.PainnCondVelocity(n_features=args.n_features, model_layers=args.n_model_layers, 
@@ -83,7 +100,12 @@ def train_model(args):
                                         cutoff=args.radius_cutoff, k=args.k, virtual_clusters=args.virtual_nodes,
                                         cluster_ratio=args.cluster_ratio, k_meta=args.k_meta,
                                         virtual_to_virtual_hop=args.virtual_virtual_hop)
-        cfm = model.CFM(vf, lr=args.learning_rate)
+        cfm = model.CFM(
+                vf,
+                lr=args.learning_rate,
+                rama_prior=rama_prior,
+                lambda_rama=args.lambda_rama,
+                )
 
     root_dir = Path(__file__).resolve().parents[1]
     wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers)
@@ -141,6 +163,18 @@ def main():
     parser.add_argument("--save_freq", type=int, default=30, help="Frequency of saving the model in minutes.")
     parser.add_argument('--num_workers', type=int, help="Number workers (GPU Training only).")
     parser.add_argument('--no_ot', action='store_true', help='Disable optimal transport')
+    parser.add_argument(
+        "--rama_prior",
+        type=str,
+        default=None,
+        help="Path to the fitted residue-conditioned von Mises .npz file.",
+    )
+    parser.add_argument(
+        "--lambda_rama",
+        type=float,
+        default=0.0,
+        help="Weight of the fitted Ramachandran mixture NLL.",
+    )
     parser.add_argument("--radius_cutoff", type=float, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
     parser.add_argument("--k", type=int, default=None, help="K-Nearest neighbors to include, if None (default) RadiusGraph is used instead.")
     parser.add_argument("--virtual-nodes", action="store_true", help="Train where centroids are calculated with k-nn graphs are computed around the centroids and then a sparse k-nn of clusters pass infromation between each other.")

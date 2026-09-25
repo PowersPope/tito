@@ -64,7 +64,7 @@ def get_base_dataset(args):
     paths = {
         "mdqm9": "scripts/preprocessing/storage/MDQM9-nc/",
         "timewarp": "scripts/preprocessing/storage/timewarp/4AA-large/4AA-large.h5",
-        "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns_phipsi_noderestype.h5",
+        "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns_phipsi_noderestype_genpreproFrames.h5",
             }
     print("MAKE SURE YOU WANT TO USE OCTOPEPTIDE_5ns.h5!!!")
     if args.data_set not in datasets:
@@ -124,7 +124,12 @@ def get_save_path(args, i_mol, i_job=None):
     Get the path to save the samples.
     """
 
-    model_name = args.model_path.split("/")[-1].replace(".ckpt", "")
+#     model_name = args.model_path.split("/")[-1].replace(".ckpt", "")
+    model_name = (
+            f"model-{args.run_id}-{args.tag}"
+            if getattr(args, "run_id", None)
+            else args.model_path.split("/")[-1].replace(".ckpt", "")
+            )
     if args.custom_system_initial_condition:
         system_name = args.custom_system_initial_condition.split("/")[-1].split(".")[0]
         
