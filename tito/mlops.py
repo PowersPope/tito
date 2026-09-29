@@ -66,6 +66,7 @@ def get_wandb_logger(args, repo_root, num_workers=0):
                 "rollout_rama_weight": args.rollout_rama_weight,
                 "rollout_ode_steps": args.rollout_ode_steps,
                 "rollout_nested_steps": args.rollout_nested_steps,
+                "rollout_train_batch_size": args.rollout_train_batch_size,
                 "rollout_train_every_n_steps": args.rollout_train_every_n_steps,
                 "rollout_val_batches": args.rollout_val_batches,
                 "checkpoint_metric": args.checkpoint_metric,

@@ -10,6 +10,7 @@ from tito.models.loss_terms import (
         circular_bond_angle_loss,
         circular_backbone_torsion_loss,
         )
+from tito.models.batching import subset_graph_batch
 from tito.models.rama import (
         ResidueVonMisesMixture,
         class_conditioned_rama_mmd,
@@ -27,6 +28,7 @@ class CFM(pl.pytorch.LightningModule):
             rollout_rama_weight=0.0,
             rollout_ode_steps=8,
             rollout_nested_steps=1,
+            rollout_train_batch_size=4,
             rollout_train_every_n_steps=32,
             rollout_val_batches=0,
             ):
@@ -43,6 +45,7 @@ class CFM(pl.pytorch.LightningModule):
         self.rollout_rama_weight = float(rollout_rama_weight)
         self.rollout_ode_steps = int(rollout_ode_steps)
         self.rollout_nested_steps = int(rollout_nested_steps)
+        self.rollout_train_batch_size = int(rollout_train_batch_size)
         self.rollout_train_every_n_steps = int(rollout_train_every_n_steps)
         self.rollout_val_batches = int(rollout_val_batches)
 
@@ -50,6 +53,8 @@ class CFM(pl.pytorch.LightningModule):
             raise ValueError("rollout_ode_steps must be at least 1")
         if self.rollout_nested_steps < 1:
             raise ValueError("rollout_nested_steps must be at least 1")
+        if self.rollout_train_batch_size < 0:
+            raise ValueError("rollout_train_batch_size cannot be negative")
         if self.rollout_train_every_n_steps < 1:
             raise ValueError("rollout_train_every_n_steps must be at least 1")
         if self.rollout_val_batches < 0:
@@ -76,7 +81,11 @@ class CFM(pl.pytorch.LightningModule):
             and self.global_step % self.rollout_train_every_n_steps == 0
         )
         if should_train_rollout:
-            rollout = self.get_rollout_rama_losses(batch)
+            rollout_batch = subset_graph_batch(
+                batch, self.rollout_train_batch_size
+            )
+            rollout_bs = rollout_batch['cond'].num_graphs
+            rollout = self.get_rollout_rama_losses(rollout_batch)
             losses["loss"] = (
                 losses["loss"]
                 + self.rollout_rama_weight * rollout["rama_mmd"]
@@ -86,7 +95,7 @@ class CFM(pl.pytorch.LightningModule):
                 rollout["rama_mmd"],
                 on_step=True,
                 on_epoch=False,
-                batch_size=bs,
+                batch_size=rollout_bs,
                 sync_dist=True,
             )
             self.log(
@@ -94,7 +103,15 @@ class CFM(pl.pytorch.LightningModule):
                 losses["loss"],
                 on_step=True,
                 on_epoch=False,
-                batch_size=bs,
+                batch_size=rollout_bs,
+                sync_dist=True,
+            )
+            self.log(
+                "train/rollout_graph_count",
+                losses["loss"].new_tensor(float(rollout_bs)),
+                on_step=True,
+                on_epoch=False,
+                batch_size=rollout_bs,
                 sync_dist=True,
             )
         return losses

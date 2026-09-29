@@ -375,6 +375,23 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         This does not guarantee triangular tesselation.
         Though it is fast.
         """
+        if not torch.isfinite(centroid_pos).all():
+            raise FloatingPointError(
+                "Non-finite centroid coordinates during rollout graph construction"
+            )
+
+        if centroid_batch.numel() == 0:
+            raise ValueError("Rollout produced an empty centroid batch")
+
+        if centroid_batch.min() < 0:
+            raise ValueError("centroid_batch contains negative graph indices")
+
+        counts = torch.bincount(centroid_batch)
+        if counts.min() <= k_meta:
+            raise ValueError(
+                f"Each graph needs more than {k_meta} centroids; "
+                f"minimum observed count was {counts.min().item()}"
+            )
         ei = knn_graph(centroid_pos, k=k_meta, batch=centroid_batch, loop=False)
         return self.dedupe_undirected(ei)
 
