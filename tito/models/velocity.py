@@ -57,6 +57,7 @@ class PainnCondVelocity(device.Module):
             # This is the new stuff that will be added after this training run
             embedding.ResidueEmbedding(n_features=n_features),
             embedding.ResidueRamaEmbedding(n_features=n_features),
+#             embedding.AtomTypeEmbedding(n_features=n_features),
             embedding.CombineInvariantFeatures(3 * n_features, n_features),
             embedding.EdgeEmbedding(n_features=n_features),
             embedding.RelativeResidueFrameEdgeEmbedding(n_features=n_features, coordinate_scale=length_scale),
