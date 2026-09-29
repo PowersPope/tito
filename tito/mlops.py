@@ -62,6 +62,13 @@ def get_wandb_logger(args, repo_root, num_workers=0):
                 "multigpu": args.multigpu,
                 "num_workers": num_workers,
                 "distinguish_atoms": args.distinguish_atoms,
+                "lambda_rama": args.lambda_rama,
+                "rollout_rama_weight": args.rollout_rama_weight,
+                "rollout_ode_steps": args.rollout_ode_steps,
+                "rollout_nested_steps": args.rollout_nested_steps,
+                "rollout_train_every_n_steps": args.rollout_train_every_n_steps,
+                "rollout_val_batches": args.rollout_val_batches,
+                "checkpoint_metric": args.checkpoint_metric,
             },
             settings=wandb.Settings(
                 save_code=True,

@@ -89,6 +89,11 @@ def train_model(args):
                 checkpoint_path=ckpt,
                 rama_prior=rama_prior,
                 lambda_rama=args.lambda_rama,
+                rollout_rama_weight=args.rollout_rama_weight,
+                rollout_ode_steps=args.rollout_ode_steps,
+                rollout_nested_steps=args.rollout_nested_steps,
+                rollout_train_every_n_steps=args.rollout_train_every_n_steps,
+                rollout_val_batches=args.rollout_val_batches,
                 )
         # The CLI learning rate must override the value saved by the source run.
         cfm.learning_rate = args.learning_rate
@@ -105,12 +110,17 @@ def train_model(args):
                 lr=args.learning_rate,
                 rama_prior=rama_prior,
                 lambda_rama=args.lambda_rama,
+                rollout_rama_weight=args.rollout_rama_weight,
+                rollout_ode_steps=args.rollout_ode_steps,
+                rollout_nested_steps=args.rollout_nested_steps,
+                rollout_train_every_n_steps=args.rollout_train_every_n_steps,
+                rollout_val_batches=args.rollout_val_batches,
                 )
 
     root_dir = Path(__file__).resolve().parents[1]
     wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers)
 
-    monitor = "valid/loss" if not args.no_evaluate else "train/loss"
+    monitor = args.checkpoint_metric if not args.no_evaluate else "train/loss"
     model_callback = pl.pytorch.callbacks.ModelCheckpoint(
             monitor=monitor, 
             filename=f"{args.data_set}-{{epoch:02d}}-{{step}}",
@@ -174,6 +184,48 @@ def main():
         type=float,
         default=0.0,
         help="Weight of the fitted Ramachandran mixture NLL.",
+    )
+    parser.add_argument(
+        "--rollout_rama_weight",
+        type=float,
+        default=0.0,
+        help=(
+            "Weight of the differentiable rollout Ramachandran MMD. "
+            "Zero disables rollout regularization during training."
+        ),
+    )
+    parser.add_argument(
+        "--rollout_ode_steps",
+        type=int,
+        default=8,
+        help="Euler steps used by rollout training and validation.",
+    )
+    parser.add_argument(
+        "--rollout_nested_steps",
+        type=int,
+        default=1,
+        help="Autoregressive transitions included in each rollout loss.",
+    )
+    parser.add_argument(
+        "--rollout_train_every_n_steps",
+        type=int,
+        default=32,
+        help="Apply rollout regularization every N optimizer steps.",
+    )
+    parser.add_argument(
+        "--rollout_val_batches",
+        type=int,
+        default=0,
+        help="Validation batches per epoch used for rollout metrics; zero disables them.",
+    )
+    parser.add_argument(
+        "--checkpoint_metric",
+        type=str,
+        default="valid/loss",
+        help=(
+            "Metric used to select model artifacts. For rollout-aware runs, "
+            "use valid/loss_rollout_rama_mmd."
+        ),
     )
     parser.add_argument("--radius_cutoff", type=float, default=None, help="Specify a radius cutoff for our Graph being build within PainnCondVelocity.")
     parser.add_argument("--k", type=int, default=None, help="K-Nearest neighbors to include, if None (default) RadiusGraph is used instead.")
