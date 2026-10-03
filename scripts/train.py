@@ -69,7 +69,7 @@ def train_model(args):
     if hasattr(args, 'from_checkpoint_id') and args.from_checkpoint_id is not None:
         print(f"Loading model from checkpoint {args.from_checkpoint_id} ...")
         project = args.data_set + "-tito"
-        ckpt = mlops.get_checkpoint(project, args.from_checkpoint_id, tag=args.checkpoint_tag)
+        ckpt = mlops.get_checkpoint(args.entity, project, args.from_checkpoint_id, tag=args.checkpoint_tag)
         cfm = model.CFM.load_from_checkpoint(checkpoint_path=ckpt)
     else:
         print("Creating new model ...")
@@ -122,6 +122,7 @@ def main():
     parser.add_argument('--no_evaluate', action='store_true', help="If set, do not run validation.")
 
     parser.add_argument('--from_checkpoint_id', type=str, help="Wandb run id of checkpoint to start training from.")
+    parser.add_argument('--entity', type=str, default="apowers4-vanderbilt-university", help="Wandb entity of checkpoint to start training from.")
     parser.add_argument('--checkpoint_tag', type=str, default="latest", help="Wandb tag of checkpoint to start training from.")
     parser.add_argument('--n_features', type=int, default=64, help="Number of hidden features.")
     parser.add_argument('--n_model_layers', type=int, default=5, help="Number of score layers.")

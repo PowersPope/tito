@@ -19,18 +19,18 @@ def load(path):
     with open(path, "rb") as f:
         return pkl.load(f)
     
-def get_artifact(project, run_id, tag="best"):
+def get_artifact(entity, project, run_id, tag="best"):
     api = wandb.Api()
     artifact = api.artifact(
-        os.path.join(project, f"model-{run_id}:{tag}"), type="model"
+        os.path.join(entity, project, f"model-{run_id}:{tag}"), type="model"
     )
     #wandb.init(project=project)
     #artifact_path = f"juan-viguera/{project}/model-{run_id}:{tag}"
     #artifact = wandb.use_artifact(artifact_path, type='model')
     return artifact
 
-def get_checkpoint(project, run_id, tag="best"):
-    artifact_dir = get_artifact(project, run_id, tag=tag).download()
+def get_checkpoint(entity, project, run_id, tag="best"):
+    artifact_dir = get_artifact(entity, project, run_id, tag=tag).download()
     artifact_dir = fix_artifact_dir(artifact_dir)
     return os.path.join(artifact_dir, "model.ckpt")
 

@@ -57,7 +57,8 @@ class PainnCondVelocity(device.Module):
             embedding.NodeEmbedding(n_features=n_features),
             # This is the new stuff that will be added after this training run
             embedding.ResidueEmbedding(n_features=n_features),
-            embedding.ResidueRamaEmbedding(n_features=n_features),
+#             embedding.ResidueRamaEmbedding(n_features=n_features),
+            embedding.BackboneAndSidechainEmbedding(n_features=n_features),
             embedding.CombineInvariantFeatures(3 * n_features, n_features),
             embedding.EdgeEmbedding(n_features=n_features),
             embedding.AddEquivariantFeatures(n_features=n_features),
@@ -92,7 +93,7 @@ class PainnCondVelocity(device.Module):
             self.cluster_msgpassing = CentroidVirtualMsgPass(
                     hidden_dim=n_features,
                     k_meta=k_meta,
-                    virtual_to_virtual_hop=False,
+                    virtual_to_virtual_hop=virtual_to_virtual_hop,
                     )
             self.cluster_builder = graph.AddVirtualNodeToConnectClusters()
 
@@ -188,10 +189,11 @@ class PainnCondVelocity(device.Module):
         # Initialize with random equivariant features, as OT is not done for the condition only the target
 #         corr.equivariant_node_features = torch.randn_like(cond.equivariant_node_features) 
 #         corr.equivariant_node_features = torch.zeros_like(cond.equivariant_node_features) 
-        corr.equivariant_node_features = rand_eq_node_features
+        corr.equivariant_node_features = cond.equivariant_node_features
 
-        dx = corr.x + self.score(corr).equivariant_node_features.squeeze() 
-        dx = center_coordinates_batch(dx, corr.batch) 
+#         raw_score = corr.x + self.score(corr).equivariant_node_features.squeeze() 
+        raw_score = self.score(corr).equivariant_node_features.squeeze() 
+        dx = center_coordinates_batch(raw_score, corr.batch) 
         #print('is dx centered', all_centered(dx, corr.batch), flush=True)
         #epsilon_hat = corr.clone()
 
