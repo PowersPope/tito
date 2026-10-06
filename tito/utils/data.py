@@ -63,7 +63,8 @@ def get_base_dataset(args):
     paths = {
         "mdqm9": "scripts/preprocessing/storage/MDQM9-nc/",
         "timewarp": "scripts/preprocessing/storage/timewarp/4AA-large/4AA-large.h5",
-        "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns.h5",
+#         "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns.h5",
+        "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns_phipsi_noderestype_genpreproFrames_medatomtype.h5",
             }
     if args.data_set not in datasets:
         raise ValueError(f"Dataset {args.data_set} not supported. Choose from {list(datasets.keys())}.")
