@@ -5,12 +5,12 @@ from tqdm import tqdm
 from scipy.optimize import linear_sum_assignment
 import mdtraj
 from rdkit import Chem
+from scripts.octopeptide_to_h5 import get_atom_indices, build_residue_frame_data, build_medium_atom_type
 
 import tito.utils as utils
 import torch_geometric as geom
 
 from tito import DEVICE
-
 
 class BaseDensity:
     def __init__(self, std):
@@ -202,6 +202,15 @@ class PDBDataset:
         bond_index, bonds = utils.get_bond_index_and_bonds(self.mol_suppl[0])
         atoms = [atom.GetAtomicNum() for atom in self.mol_suppl[0].GetAtoms()]
 
+        atom_indices = get_atom_indices(pdb_path, "protein")
+
+        probe = mdtraj.load_pdb(pdb_path, atom_indices=atom_indices)
+
+        topology = probe.topology
+
+        self.frame_data = build_residue_frame_data(topology)
+        self.medium_atom_type = build_medium_atom_type(topology)
+
         self.bond_index = [bond_index]
         self.bonds = [bonds]
         self.atoms = [atoms]
@@ -218,6 +227,8 @@ class PDBDataset:
         atoms = torch.LongTensor(self.atoms[0])
         bond_index = self.bond_index[0]
         bonds = self.bonds[0]
+        node_residue_id = torch.LongTensor(self.frame_data["node_residue_id"])
+        medium_atom_type = torch.LongTensor(self.medium_atom_type)
 
         x = pos
         if self.normalize:
@@ -228,5 +239,7 @@ class PDBDataset:
             node_type=atoms,
             bond_index=bond_index,
             bond_type=bonds,
+            node_residue_id=node_residue_id,
+            medium_atom_type=medium_atom_type,
         )}
         return item

@@ -102,6 +102,8 @@ if __name__ == "__main__":
             from tito.data.mdqm9 import SCALING_FACTOR
         elif args.data_set == "timewarp":
             from tito.data.timewarp import SCALING_FACTOR
+        else:
+            from tito.data.octopeptide import SCALING_FACTOR
         dataset = PDBDataset(args.pdb_path, scaling_factor=SCALING_FACTOR)
     else:
         dataset = get_dataset(args)

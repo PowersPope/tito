@@ -151,3 +151,26 @@ class ResidueRamaEmbedding(NominalEmbedding):
 class BackboneAndSidechainEmbedding(NominalEmbedding):
     def __init__(self, n_features):
         super().__init__(feature_name="medium_atom_type", n_features=n_features, n_types=2, feature_type="node")
+
+class RelativeResidueOffsetEmbedding(device.Module):
+    """Embed signed sequence separation dst - src on every graph edge."""
+
+    def __init__(self, n_features, max_separation=4):
+        super().__init__()
+        self.max_separation = max_separation
+        self.embedding = torch.nn.Embedding(2*self.max_separation + 1, n_features)
+
+    def forward(self, batch):
+        batch = batch.clone()
+        src, dst = batch.edge_index
+
+        residue_id = batch.node_residue_id.long()
+
+        delta = residue_id[dst] - residue_id[src]
+        delta = delta.clamp(-self.max_separation, self.max_separation)
+
+        offset_index = delta + self.max_separation
+        offset_feats = self.embedding(offset_index)
+
+        batch.invariant_edge_features = batch.invariant_edge_features + offset_feats
+        return batch
