@@ -6,6 +6,8 @@ from scipy.optimize import linear_sum_assignment
 import mdtraj
 from rdkit import Chem
 from scripts.octopeptide_to_h5 import get_atom_indices, build_residue_frame_data, build_medium_atom_type
+import tempfile
+from pathlib import Path
 
 import tito.utils as utils
 import torch_geometric as geom
@@ -194,26 +196,37 @@ class LazyH5DatasetMixin:
 class PDBDataset:
     def __init__(self, pdb_path, scaling_factor):
         self.pdb_path = pdb_path
-        self.traj = mdtraj.load_pdb(pdb_path)
-        self.positions = self.traj.xyz
-        self.mol_suppl = [Chem.MolFromPDBFile(pdb_path, removeHs=False, sanitize=True)]
         self.scaling_factor = scaling_factor
 
-        bond_index, bonds = utils.get_bond_index_and_bonds(self.mol_suppl[0])
-        atoms = [atom.GetAtomicNum() for atom in self.mol_suppl[0].GetAtoms()]
+#         self.traj = mdtraj.load_pdb(pdb_path)
+        full_traj = mdtraj.load_pdb(pdb_path)
+        atom_indices = full_traj.topology.select("protein")
 
-        atom_indices = get_atom_indices(pdb_path, "protein")
+        if len(atom_indices) == 0:
+            raise ValueError("Protein selection matched no atoms!")
 
-        probe = mdtraj.load_pdb(pdb_path, atom_indices=atom_indices)
+        self.traj = full_traj.atom_slice(atom_indices)
+        self.positions = self.traj.xyz
+        topology = self.traj.topology
 
-        topology = probe.topology
+        with tempfile.TemporaryDirectory() as directory:
+            selected_pdb = Path(directory) / "selected.pdb"
+            self.traj[0].save_pdb(str(selected_pdb))
+
+            mol = Chem.MolFromPDBFile(
+                    str(selected_pdb), removeHs=False, sanitize=True,
+                    )
+
+#         self.mol_suppl = [Chem.MolFromPDBFile(pdb_path, removeHs=False, sanitize=True)]
+        self.mol_suppl = [mol]
+        bond_index, bonds = utils.get_bond_index_and_bonds(mol)
+        self.atoms = [[atom.GetAtomicNum() for atom in mol.GetAtoms()]]
 
         self.frame_data = build_residue_frame_data(topology)
         self.medium_atom_type = build_medium_atom_type(topology)
 
         self.bond_index = [bond_index]
         self.bonds = [bonds]
-        self.atoms = [atoms]
 
         # Placeholders expected by downstream code
         self.normalize = True #careful here, provide positions as model expects them
@@ -230,7 +243,7 @@ class PDBDataset:
         node_residue_id = torch.LongTensor(self.frame_data["node_residue_id"])
         medium_atom_type = torch.LongTensor(self.medium_atom_type)
 
-        x = pos
+        x = utils.center_coordinates(pos)
         if self.normalize:
             x *= self.scaling_factor
 
