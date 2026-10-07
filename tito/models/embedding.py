@@ -4,6 +4,7 @@ import numpy as np
 import torch
 
 from tito.models import device
+import math
 
 
 class MLP(device.Module):
@@ -172,5 +173,27 @@ class RelativeResidueOffsetEmbedding(device.Module):
         offset_index = delta + self.max_separation
         offset_feats = self.embedding(offset_index)
 
-        batch.invariant_edge_features = batch.invariant_edge_features + offset_feats
+        batch.invariant_edge_features += offset_feats
         return batch
+
+class AbsolutePositionEmbedding(device.Module):
+    def __init__(self, n_features, max_len = 5000):
+        super().__init__()
+        pe = torch.zeros(max_len, n_features)
+        position = torch.arange(0, max_len, dtype=torch.float).unsqueeze(1) # (max_len, 1)
+        div_term = torch.exp(torch.arange(0, n_features, 2).float() * (-math.log(10000.0) / n_features)) # (n_features // 2)
+        pe[:, 0::2] = torch.sin(position * div_term) # (max_len, n_features//2)
+        pe[:, 1::2] = torch.cos(position * div_term)
+        self.register_buffer('pe', pe)
+
+    def forward(self, batch):
+        batch = batch.clone()
+        index = batch.node_residue_id.long()
+
+        position_features = self.pe[index].to(dtype=batch.invariant_node_features.dtype)
+        batch.invariant_node_features = torch.cat(
+                (batch.invariant_node_features, position_features), dim=-1
+                )
+        return batch
+
+

@@ -105,6 +105,27 @@ if __name__ == "__main__":
         else:
             from tito.data.octopeptide import SCALING_FACTOR
         dataset = PDBDataset(args.pdb_path, scaling_factor=SCALING_FACTOR)
+
+        data = dataset[0]["cond"]
+
+        print("coordinate frames:", dataset.positions.shape, flush=True)
+        print("RDKit atom count:", dataset.mol_suppl[0].GetNumAtoms(), flush=True)
+
+        for key in (
+                "x",
+                "node_type",
+                "medium_atom_type",
+                "node_residue_id",
+                "bond_index",
+                "bond_type",
+                ):
+            print(key, tuple(data[key].shape), flush=True)
+
+        n=data.x.shape[0]
+        for key in ("node_type", "medium_atom_type", "node_residue_id"):
+            if data[key].shape != (n,):
+                raise ValueError(f"{key} has shape {tuple(data[key].shape)}; "
+                                 f"expected ({n},), one entry per coordinate atom")
     else:
         dataset = get_dataset(args)
     args.model_path = resolve_checkpoint(args)
