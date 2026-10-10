@@ -52,24 +52,39 @@ class PainnCondVelocity(device.Module):
         self.n_features = n_features
 
         self.temperature = temperature
-        self.embed = torch.nn.Sequential(
-            graph.AddSpatialFeatures(),
-            embedding.NodeEmbedding(n_features=n_features),
-            # This is the new stuff that will be added after this training run
-#             embedding.ResidueEmbedding(n_features=n_features),
-#             embedding.ResidueRamaEmbedding(n_features=n_features),
-            embedding.BackboneAndSidechainEmbedding(n_features=n_features),
-            embedding.CombineInvariantFeatures(2 * n_features, n_features),
-            embedding.EdgeEmbedding(n_features=n_features),
-            embedding.RelativeResidueOffsetEmbedding(n_features=n_features),
-            embedding.AddEquivariantFeatures(n_features=n_features),
-            painn.Painn(
-                n_features=n_features,
-                n_layers=embedding_layers,
-                length_scale=length_scale,
-                n_reduced_features=n_reduced_features,
-            ),
-        )
+        if virtual_clusters:
+            self.embed = torch.nn.Sequential(
+                graph.AddSpatialFeatures(),
+                embedding.NodeEmbedding(n_features=n_features),
+                embedding.BackboneAndSidechainEmbedding(n_features=n_features),
+                embedding.CombineInvariantFeatures(2 * n_features, n_features),
+                embedding.EdgeEmbedding(n_features=n_features),
+                embedding.RelativeResidueOffsetEmbedding(n_features=n_features),
+                embedding.AddEquivariantFeatures(n_features=n_features),
+                embedding.DiffClusters(n_features=n_features),
+                painn.Painn(
+                    n_features=n_features,
+                    n_layers=embedding_layers,
+                    length_scale=length_scale,
+                    n_reduced_features=n_reduced_features,
+                ),
+            )
+        else:
+            self.embed = torch.nn.Sequential(
+                graph.AddSpatialFeatures(),
+                embedding.NodeEmbedding(n_features=n_features),
+                embedding.BackboneAndSidechainEmbedding(n_features=n_features),
+                embedding.CombineInvariantFeatures(2 * n_features, n_features),
+                embedding.EdgeEmbedding(n_features=n_features),
+                embedding.RelativeResidueOffsetEmbedding(n_features=n_features),
+                embedding.AddEquivariantFeatures(n_features=n_features),
+                painn.Painn(
+                    n_features=n_features,
+                    n_layers=embedding_layers,
+                    length_scale=length_scale,
+                    n_reduced_features=n_reduced_features,
+                ),
+            )
 
         n_invariant_features = 3 + (1 if temperature else 0)
         self.score = torch.nn.Sequential(
@@ -156,12 +171,16 @@ class PainnCondVelocity(device.Module):
 
         cond.edge_index = edge_index
         cond.edge_type = edge_type
-        cond = self.embed(cond)
+#         cond = self.embed(cond)
 
         if self.virtual_clusters:
             # Cluster grab our information
             cluster_idx, centroid_pos, centroid_batch, _ = self.cluster_builder.build_cluster_points(
                     pos, cond.batch, self.cluster_ratio)
+
+            # Add in node spatial information
+            cond.cluster_num = cluster_idx
+            cond = self.embed(cond)
 
             # pool learned node features into clusters
             h_cluster = scatter(
@@ -182,6 +201,9 @@ class PainnCondVelocity(device.Module):
                     cluster_idx=cluster_idx,
                     logger=logger,
                     )
+        else:
+            cond = self.embed(cond)
+
 
         corr.edge_index = edge_index
         corr.edge_type = edge_type

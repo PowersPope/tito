@@ -43,7 +43,8 @@ def analyze(args):
         if md_trajs.ndim == 3:
             md_trajs = np.expand_dims(md_trajs, axis=0) 
         feature_trajs = []
-        for traj in range(md_trajs.size(0)):
+        print("MD TRAJS:", md_trajs)
+        for traj in range(md_trajs.shape[0]):
             print(f"traj {traj}")
             print("md shape:", md_trajs[traj].shape)
             dihedrals_md, sinusoids_md = compute_and_save_dihedrals_and_sinusoids(mol, md_trajs[traj], mol_idx=i_mol, args=args, mode="md")  # mode="md" to save in md folder

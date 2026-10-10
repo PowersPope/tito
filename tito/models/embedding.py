@@ -158,7 +158,8 @@ class RelativeResidueOffsetEmbedding(device.Module):
     def __init__(self, n_features, max_separation=4):
         super().__init__()
         self.max_separation = max_separation
-        self.embedding = torch.nn.Embedding(2*self.max_separation + 1, n_features)
+        # 1 for 0 (resi) and 1 for anything that is farther then +-4
+        self.embedding = torch.nn.Embedding(2*self.max_separation + 2, n_features)
 
     def forward(self, batch):
         batch = batch.clone()
@@ -166,11 +167,35 @@ class RelativeResidueOffsetEmbedding(device.Module):
 
         residue_id = batch.node_residue_id.long()
 
+        # (-4, 4) relative information -- (everything else is 5; not relative info)
         delta = residue_id[dst] - residue_id[src]
-        delta = delta.clamp(-self.max_separation, self.max_separation)
+        delta = torch.where(delta > 4, self.max_separation + 1, delta)
+        delta = torch.where(delta < -4, self.max_separation + 1, delta)
+#         delta = delta.clamp(-self.max_separation, self.max_separation)
 
         offset_index = delta + self.max_separation
         offset_feats = self.embedding(offset_index)
 
         batch.invariant_edge_features = batch.invariant_edge_features + offset_feats
         return batch
+
+class SpatioDifference(NominalEmbedding):
+    def __init__(self, n_features):
+        super().__init__(feature_name="cluster_diff", n_features=n_features, n_types=2, feature_type="node")
+
+class DiffClusters(device.Module):
+    def __init__(self, n_features):
+        super().__init__()
+
+        self.spatio_diff_embed = torch.nn.Embedding(2, n_features)
+
+    def forward(self, batch):
+        batch = batch.clone()
+        src, dst = batch.edge_index
+
+        cluster_diff = (batch.cluster_num[src] == batch.cluster_num[dst]).to(torch.long)
+        cluster_diff_embed = self.spatio_diff_embed(cluster_diff)
+
+        batch.invariant_edge_features += cluster_diff_embed
+        return batch
+

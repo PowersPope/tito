@@ -6,6 +6,7 @@ from rdkit import Chem
 from tqdm import tqdm
 from collections import defaultdict
 
+from scripts.octopeptide_to_h5 import build_medium_atom_type, build_residue_frame_data
 from tito import utils
 from tito.data.datasets import LaggedDatasetMixin, LazyH5DatasetMixin, StandardDatasetMixin
 from tito.models.loss_terms import unique_bond_index
@@ -57,9 +58,8 @@ class TimewarpBase(LazyH5DatasetMixin):
         self.traj_names = []
         self.lags = []
 
-        self.phi_index = {}
-        self.psi_index = {}
-        self.rama_residue_type = {}
+        self.frame_data = {}
+        self.medium_atom_type = {}
 
 
         for molecule_idx, (name, group) in enumerate(tqdm(self.h5file[self.split].items())):
@@ -69,6 +69,7 @@ class TimewarpBase(LazyH5DatasetMixin):
 #             trajectory = np.asarray(group[molecule_idx]["traj"][()], dtype=np.float32)
 
             mol = Chem.MolFromMolBlock(group["mol"][()], sanitize=True, removeHs=False)
+            topology = utils.rdkit_to_mdtraj_topology(mol)
             self.mol_suppl.append(mol)
             bond_index, bond_type = utils.get_bonds_from_rdkit(mol)
             atoms = utils.get_atoms_from_rdkit(mol)
@@ -87,13 +88,8 @@ class TimewarpBase(LazyH5DatasetMixin):
                     self.h5file["data"].attrs.get("coordinate_scale", SCALING_FACTOR)
                                         )
 
-            phi_index = torch.as_tensor(group["phi_index"][()], dtype=torch.long).T.contiguous()
-            psi_index = torch.as_tensor(group["psi_index"][()], dtype=torch.long).T.contiguous()
-            rama_residue_type = torch.as_tensor(group["rama_residue_type"][()], dtype=torch.long)
-
-            self.phi_index[molecule_idx] = phi_index
-            self.psi_index[molecule_idx] = psi_index
-            self.rama_residue_type[molecule_idx] = rama_residue_type
+            self.frame_data[molecule_idx] = build_residue_frame_data(topology)
+            self.medium_atom_type[molecule_idx] = build_medium_atom_type(topology)
 
 
         self.traj_boundaries = np.append([0], np.cumsum(self.traj_lens))
@@ -112,6 +108,8 @@ class TimewarpBase(LazyH5DatasetMixin):
         config = self.h5file[self.split][traj_name]["traj"][config_idx]  # type:ignore
         angle_index = self.build_angle_index(
                 self.bond_index[molecule_idx], len(self.atoms[molecule_idx]))
+        node_residue_id = torch.LongTensor(self.frame_data[molecule_idx]["node_residue_id"])
+        medium_atom_type = torch.LongTensor(self.medium_atom_type[molecule_idx])
 
         x = torch.tensor(config)
         x = utils.center_coordinates(x)
@@ -119,16 +117,14 @@ class TimewarpBase(LazyH5DatasetMixin):
         if self.normalize:
             x *= self.scaling_factor
 
-
         data = geom.data.Data(
             x=x,
             node_type=self.atoms[molecule_idx],
             bond_index=self.bond_index[molecule_idx],
             bond_type=self.bonds[molecule_idx],
             angle_index=angle_index,
-            phi_index=self.phi_index[molecule_idx],
-            psi_index=self.psi_index[molecule_idx],
-            rama_residue_type=self.rama_residue_type[molecule_idx],
+            node_residue_id=node_residue_id,
+            medium_atom_type=medium_atom_type,
             index=torch.tensor([index]),
         )
         return data
