@@ -45,7 +45,7 @@ def get_wandb_logger(args, repo_root, num_workers=0):
     wandblogger = WandbLogger(
             entity="apowers4-vanderbilt-university",
             project=f"{args.data_set}-tito",
-            job_type="retrain-tito",
+            job_type="batch-benchmark" if args.benchmark_steps else "retrain-tito",
             config={
                 "data_set": args.data_set,
                 "epochs": args.epochs,
@@ -62,12 +62,19 @@ def get_wandb_logger(args, repo_root, num_workers=0):
                 "multigpu": args.multigpu,
                 "num_workers": num_workers,
                 "distinguish_atoms": args.distinguish_atoms,
+                "val_per_dataset": args.val_per_dataset,
+                "val_batch_size": args.val_batch_size,
+                "val_every_steps": args.val_every_steps,
+                "max_steps": args.max_steps,
+                "benchmark_steps": args.benchmark_steps,
+                "benchmark_warmup": args.benchmark_warmup,
             },
             settings=wandb.Settings(
                 save_code=True,
                 code_dir=str(repo_root),
                 ),
-            log_model="all",
+            log_model=False if args.benchmark_steps else "all",
+#             log_model="all",
         )
     return wandblogger
 

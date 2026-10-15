@@ -196,7 +196,7 @@ class LazyH5DatasetMixin:
 class PDBDataset:
     def __init__(self, pdb_path, scaling_factor):
         self.pdb_path = pdb_path
-        self.scaling_factor = scaling_factor
+#         self.scaling_factor = scaling_factor
 
 #         self.traj = mdtraj.load_pdb(pdb_path)
         full_traj = mdtraj.load_pdb(pdb_path)
@@ -207,6 +207,7 @@ class PDBDataset:
 
         self.traj = full_traj.atom_slice(atom_indices)
         self.positions = self.traj.xyz
+        self.scaling_factor = 1 / np.std(self.positions)
         topology = self.traj.topology
 
         with tempfile.TemporaryDirectory() as directory:
