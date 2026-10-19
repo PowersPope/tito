@@ -190,7 +190,8 @@ class SE3Message(device.Module):
             self.reducer = Reducer(n_features, n_reduced_features)
             n_hidden_features = n_reduced_features
 
-        self.positional_encoder = embedding.PositionalEncoder(n_hidden_features, max_length=length_scale)
+#         self.positional_encoder = embedding.PositionalEncoder(n_hidden_features, max_length=length_scale)
+        self.positional_encoder = embedding.RadialDistanceEncoder(n_hidden_features, max_length=length_scale)
         self.phi = embedding.MLP(2 * n_hidden_features, n_hidden_features, 5 * n_hidden_features)
         self.w = embedding.MLP(n_hidden_features, n_hidden_features, 5 * n_hidden_features)
         self.n_hidden_features = n_hidden_features

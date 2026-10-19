@@ -101,6 +101,7 @@ class PainnCondVelocity(device.Module):
                 n_features=n_features,
                 n_features_out=1,
                 n_layers=model_layers,
+                length_scale=length_scale,
                 n_reduced_features=n_reduced_features,
             ),
         )
@@ -125,22 +126,6 @@ class PainnCondVelocity(device.Module):
 
         self.timer = timer.Timer()
 
-#     def smooth_bounding(
-#             self,
-#             vectors: Tensor,
-#             max_norm: float,
-#             eps: float = 1e-8,
-#             ):
-#         """
-#         Bound the final vector dimension while preserving direction:
-# 
-#         :param 
-# 
-#         :return bounded_vec: (A, 3) or (A, F, 3)
-#         """
-#         norm = torch.linalg.vector_norm(vectors, dim=-1, keepdim=True)
-#         bounded_norm = max_norm * torch.tand(norm/max_norm)
-#         return vectors * (bounded_norm / norm.clamp_min(eps))
 
     def preprocess(self, batch):
         if self.virtual_node:

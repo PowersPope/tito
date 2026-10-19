@@ -179,6 +179,57 @@ class RelativeResidueOffsetEmbedding(device.Module):
         batch.invariant_edge_features = batch.invariant_edge_features + offset_feats
         return batch
 
+class RelativeResidueOffsetEmbedding(device.Module):
+    """Embed signed sequence separation dst - src on every graph edge."""
+
+    def __init__(self, n_features, max_separation=4):
+        super().__init__()
+        if max_separation < 1:
+            raise ValueError("max_separation must be positive")
+
+        self.max_separation = max_separation
+
+        self.register_buffer(
+                "far_bounds",
+                max_separation * torch.tensor([2, 4, 8, 16]),
+                )
+
+        self.n_local = 2 * max_separation + 1
+        self.n_far = self.far_bounds.numel() + 1
+        self.inter_chain_index = self.n_local + 2 * self.n_far
+
+        # 1 for 0 (resi) and 1 for anything that is farther then +-4
+        self.embedding = torch.nn.Embedding(self.inter_chain_index + 1, n_features)
+
+    def bucket_indices(self, residue_id, edge_index, chain_id=None):
+        src, dst = edge_index
+        delta = residue_id[dst].long() - residue_id[src].long()
+        magnitude = delta.abs()
+
+        far_bin = torch.bucketize(magnitude, self.far_bounds, right=False)
+        far_index = self.n_local + 2 * far_bin + (delta > 0).long()
+        index = torch.where(magnitude <= self.max_separation, delta + self.max_separation, far_index)
+
+        if chain_id is not None:
+            index = torch.where(
+                    chain_id[src] != chain_id[dist],
+                    self.inter_chain_index,
+                    index,
+                    )
+        return index
+
+    def forward(self, batch):
+        batch = batch.clone()
+
+        index = self.bucket_indices(
+                batch.node_residue_id,
+                batch.edge_index,
+                getattr(batch, "node_chain_id", None),
+                )
+
+        batch.invariant_edge_features = batch.invariant_edge_features + self.embedding(index)
+        return batch
+
 class SpatioDifference(NominalEmbedding):
     def __init__(self, n_features):
         super().__init__(feature_name="cluster_diff", n_features=n_features, n_types=2, feature_type="node")
@@ -199,3 +250,31 @@ class DiffClusters(device.Module):
         batch.invariant_edge_features += cluster_diff_embed
         return batch
 
+class RadialDistanceEncoder(torch.nn.Module):
+    """Local Gaussian radial features plus a nonperiodic distance channel."""
+
+    def __init__(self, dim, max_distance):
+        super().__init__()
+        if dim < 3 or max_distance <= 0:
+            raise ValueError("Need dim >= 3 and max_distance > 0")
+
+        self.max_distance = float(max_distance)
+
+        # Reserve the final output channel for log-distance
+        self.register_buffer(
+                "centers",
+                torch.linspace(0.0, self.max_distance, dim - 1),
+                )
+        self.width = self.max_distance / (dim - 2)
+
+    def forward(self, distance):
+        """
+        :params distance: (E,)
+        """
+        r = distance.unsqueeze(-1)
+
+        rbf = torch.exp(-0.5 * ( (r - self.centers.to(dtype=r.dtype)) / self.width ).square() )
+
+        global_distance = torch.log1p(r / self.max_distance)
+
+        return torch.cat([rbf, global_distance], dim=-1)
