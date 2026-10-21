@@ -23,6 +23,7 @@ from torch_geometric.data import Data
 
 from tito.data.timewarp import LaggedTimewarp
 from tito.data.octopeptide import LaggedOctopeptide
+from tito.data.cath import LaggedCATH
 
 from scripts.iteration_tools import validation_subset, ThroughputBenchmark
 
@@ -72,10 +73,10 @@ class CommonTrainingSchema(Dataset):
         return result
 
 def build_combined_datasets(args):
-    if not args.timewarp_path or not args.octopep_path:
-        raise ValueError("Combined training requires --timewarp-path and --octopep-path")
+    if not args.timewarp_path or not args.octopep_path or not args.cath_path:
+        raise ValueError("Combined training requires --timewarp-path, --cath_path, and --octopep-path")
 
-    if args.max_lag < max(args.timewarp_max_lag, args.octopep_max_lag):
+    if args.max_lag < max(args.timewarp_max_lag, args.octopep_max_lag, args.cath_max_lag):
         raise ValueError("--max-lag should cover both dataset lag ranges")
 
     def build_split(split):
@@ -91,6 +92,11 @@ def build_combined_datasets(args):
                     LaggedOctopeptide,
                     args.octopep_path,
                     args.octopep_max_lag,
+                ),
+                (
+                    LaggedCATH,
+                    args.cath_path,
+                    args.cath_max_lag,
                 ),
                 ):
             dataset = dataset_class(
@@ -117,14 +123,16 @@ def build_combined_datasets(args):
 
             datasets.append(dataset)
 
-        if not np.isclose(
-                datasets[0].scaling_factor,
-                datasets[1].scaling_factor,
-                ):
-            raise ValueError(
-                    "Datasets use different coordinate scaling factors; "
-                    "harmonize them before combined training"
-                    )
+        reference_scale = datasets[0].scaling_factor
+        for dataset in datasets[1:]:
+            if not np.isclose(
+                    reference_scale,
+                    dataset.scaling_factor,
+                    ):
+                raise ValueError(
+                        "Datasets use different coordinate scaling factors; "
+                        "harmonize them before combined training"
+                        )
 
         return ConcatDataset([
             CommonTrainingSchema(dataset)
@@ -280,8 +288,10 @@ def main():
 
     parser.add_argument('--timewarp-path', type=str)
     parser.add_argument('--octopep-path', type=str)
+    parser.add_argument('--cath-path', type=str)
     parser.add_argument('--timewarp-max-lag', type=float, default=1000.0, help="Timewarp maximum sampled lag in ps.")
-    parser.add_argument('--octopep-max-lag', type=float, default=10000.0, help="Octopeptide maximum sampled lag in ps.")
+    parser.add_argument('--octopep-max-lag', type=float, default=10_000.0, help="Octopeptide maximum sampled lag in ps.")
+    parser.add_argument('--cath-max-lag', type=float, default=10_000.0, help="CATH maximum sampled lag in ps.")
     parser.add_argument('--val-per-dataset', type=int, default=0, help="Validation examples per source; 0 means full validation.")
     parser.add_argument('--val-batch-size', type=int, default=None)
     parser.add_argument('--val-every-steps', type=int, default=5000)
