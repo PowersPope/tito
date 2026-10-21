@@ -5,6 +5,7 @@ import lightning as pl
 
 from tito.models import utils
 from tito.data.datasets import BaseDensity
+from tito.models.structure_condition import ConditionCenteredGaussian
 from tito.models.loss_terms import (
         bond_length_loss, 
         circular_bond_angle_loss,
@@ -114,7 +115,9 @@ class CFM(pl.pytorch.LightningModule):
         return torch.randn(cond.node_type.size(0), self.score.n_features, 3,
                            device=cond.x.device, dtype=cond.x.dtype)
 
-    def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=BaseDensity(std=1.0)):
+    def sample(self, batch, ode_steps=50, nested_samples=1, base_distribution=None):
+        if base_distribution is None:
+            raise ValueError("Pass the condition-centered prior used during training.")
         self.eval()
 
         with torch.no_grad():
@@ -141,7 +144,8 @@ class CFM(pl.pytorch.LightningModule):
                 batch["cond"].x = x0.clone() # update condition with last step
 
                 if i_nested < nested_samples - 1:
-                    x0 = base_distribution.sample_as(batch["cond"].x)
+#                     x0 = base_distribution.sample_as(batch["cond"].x)
+                    x0 = base_distribution.sample_as(batch["cond"])
                     batch["corr"].x = x0.clone()
 
             batch["traj"] = batch["cond"].clone()

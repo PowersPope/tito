@@ -6,6 +6,7 @@ from scipy.optimize import linear_sum_assignment
 import mdtraj
 from rdkit import Chem
 from scripts.octopeptide_to_h5 import get_atom_indices, build_residue_frame_data, build_medium_atom_type
+from tito.models.structure_condition import ConditionCenteredGaussian
 import tempfile
 from pathlib import Path
 
@@ -84,7 +85,7 @@ def OT_coupler(base, target, plan="pr"):
 
 
 class LaggedDatasetMixin:
-    def __init__(self, max_lag, fixed_lag=False, transform=None, uniform=False, ot_coupling=True):
+    def __init__(self, max_lag, fixed_lag=False, transform=None, uniform=False, ot_coupling=True, condition_base_std=None):
         #if max_lag is not float, is provided per molecule and we need create a max_lag per this dataset datapoint
         self.preprocess(max_lag) #this can be max(max_lag) for now
         self.ot_coupling = ot_coupling
@@ -92,7 +93,8 @@ class LaggedDatasetMixin:
         self.transform = transform if transform is not None else lambda x: x
         self.uniform = uniform
         self.ot_coupling = ot_coupling
-        self.basedistribution = BaseDensity(std=1.0) #removed name-magling to be able to use from hygher level datasets
+#         self.basedistribution = BaseDensity(std=1.0) #removed name-magling to be able to use from hygher level datasets
+        self.basedistribution = ConditionCenteredGaussian(std=condition_base_std)
 
         if not ot_coupling:
             print("OT coupling is disabled...")
@@ -156,15 +158,20 @@ class LaggedDatasetMixin:
         data0 = super().__getitem__(data0_idx)
         datat = super().__getitem__(data0_idx + lag)
 
-        base_sample = self.basedistribution.sample_as(datat.x)
+#         base_sample = self.basedistribution.sample_as(datat.x)
 
         if self.ot_coupling:
-            base, target = OT_coupler(base_sample, datat.x, plan="pr")
-        else:
-            base, target = base_sample, datat.x
-
-        datat.x = target
-        datat.xbase = base
+            raise ValueError(
+                    "Disable the existing target-based OT "
+                    "coupling for condition-centered-baes training"
+                    )
+#             base, target = OT_coupler(base_sample, datat.x, plan="pr")
+#         else:
+#             base, target = base_sample, datat.x
+# 
+#         datat.x = target
+#         datat.xbase = base
+        datat.xbase = self.basedistribution.sample_as(data0)
         
 
         item = {"cond": data0, "target": datat, "lag": torch.Tensor([lag])}

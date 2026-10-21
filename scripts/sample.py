@@ -5,6 +5,7 @@ import tito.models.model as model
 from tito.data.datasets import PDBDataset
 from tito.utils.data import get_dataset, get_batch, re_scale_samples, save_results, build_custom_initial_condition_batch
 from tito.data.datasets import BaseDensity
+from tito.models.structure_condition import ConditionCenteredGaussian
 
 
 def sample_model(args, cfm, dataset, i_mol):
@@ -19,9 +20,10 @@ def sample_model(args, cfm, dataset, i_mol):
         print("Using random initial conditions.", flush=True)
     print("Molecule index:", i_mol, flush=True)
 
-    if args.base_density_std != 1.0:
-        print(f"Using custom base distribution with std={args.base_density_std}.", flush=True)
-        dataset.basedistribution = BaseDensity(std=args.base_density_std)
+#     if args.base_density_std != 1.0:
+#         print(f"Using custom base distribution with std={args.base_density_std}.", flush=True)
+    prior = ConditionCenteredGaussian(std=args.condition_base_std)
+    dataset.basedistribution = prior
 
     if args.custom_system_initial_condition:
         print(f"Using custom initial condition from {args.custom_system_initial_condition}", flush=True)
@@ -32,7 +34,7 @@ def sample_model(args, cfm, dataset, i_mol):
     initc = {k: v.to(device) for k, v in batch.items()}  # Move to the same device as the model
     
     # Sample from the model
-    out_batch = cfm.sample(initc, ode_steps=args.ode_steps, nested_samples=args.nested_samples, base_distribution=BaseDensity(std=args.base_density_std))
+    out_batch = cfm.sample(initc, ode_steps=args.ode_steps, nested_samples=args.nested_samples, base_distribution=prior)
     
     # Save the samples
     if dataset.normalize:
@@ -93,6 +95,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
     args.fixed_lag = True
     args.mode = "sample"  # Set mode to sample for compatibility with dataset loading function
+    args.condition_base_std = args.base_density_std
+    args.no_ot = True
     if args.data_set == "ala2" or args.data_set == "mdqm9":
         args.sub_data_set = "version_0"
 

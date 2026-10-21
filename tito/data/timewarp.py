@@ -209,6 +209,7 @@ class LaggedTimewarp(LaggedDatasetMixin, TimewarpBase):
         transform=None,
         protein=None,
         ot_coupling=True,
+        condition_base_std=None,
         **kwargs,
     ):
         TimewarpBase.__init__(
@@ -228,7 +229,8 @@ class LaggedTimewarp(LaggedDatasetMixin, TimewarpBase):
 #         max_lag = int(max_lag / 5)  # turn a physical lag into a discrete lag
         LaggedDatasetMixin.__init__(
                 self, max_lag=max_lag_frames, fixed_lag=fixed_lag, 
-                transform=transform, ot_coupling=ot_coupling) # , **kwargs)
+                transform=transform, ot_coupling=ot_coupling,
+                condition_base_std=condition_base_std) # , **kwargs)
 
     def __getitem__(self, idx):
         item = LaggedDatasetMixin.__getitem__(self, idx)

@@ -27,10 +27,10 @@ def get_dataset(args):
     if args.mode == "inference" or args.mode == "sample": #inference
         if hasattr(args, "distinguish_atoms") and args.distinguish_atoms and args.data_set == "ala2":
             dataset = dataset_class(path=args.data_path, max_lag=args.lag, lazy_load=True, normalize=True, fixed_lag=args.lag,
-                uniform=False, split=args.split, distinguish=True, ot_coupling=ot_coupling) 
+                uniform=False, split=args.split, distinguish=True, ot_coupling=ot_coupling, condition_base_std=args.condition_base_std) 
         else:
             dataset = dataset_class(path=args.data_path, sub_data_set=args.sub_data_set, max_lag=args.lag, lazy_load=True, normalize=True, fixed_lag=args.lag, 
-                uniform=False, split=args.split, ot_coupling=ot_coupling)
+                uniform=False, split=args.split, ot_coupling=ot_coupling, condition_base_std=args.condition_base_std)
         return dataset
         
     else:
@@ -43,14 +43,14 @@ def get_dataset(args):
             val_indices_path = None
         if hasattr(args, "distinguish_atoms") and args.distinguish_atoms and args.data_set == "ala2":
             train_dataset = dataset_class(path=args.data_path, max_lag=args.max_lag, lazy_load=True, normalize=True, fixed_lag=False,
-                uniform=uniform_lag, split="train", distinguish=True, ot_coupling=ot_coupling) 
+                uniform=uniform_lag, split="train", distinguish=True, ot_coupling=ot_coupling, condition_base_std=args.condition_base_std) 
             val_dataset = dataset_class(path=args.data_path, max_lag=args.max_lag, lazy_load=True, normalize=True,  fixed_lag=False, 
-                uniform=uniform_lag, split="val", distinguish=True, ot_coupling=ot_coupling) 
+                uniform=uniform_lag, split="val", distinguish=True, ot_coupling=ot_coupling, condition_base_std=args.condition_base_std) 
         else:
             train_dataset = dataset_class(path=args.data_path, max_lag=args.max_lag, lazy_load=True, normalize=True, fixed_lag=False,
-                uniform=uniform_lag, split="train", sub_sampling_indices_path=train_indices_path, ot_coupling=ot_coupling) 
+                uniform=uniform_lag, split="train", sub_sampling_indices_path=train_indices_path, ot_coupling=ot_coupling, condition_base_std=args.condition_base_std) 
             val_dataset = dataset_class(path=args.data_path, max_lag=args.max_lag, lazy_load=True, normalize=True,  fixed_lag=False, 
-                uniform=uniform_lag, split="val", sub_sampling_indices_path=val_indices_path, ot_coupling=ot_coupling) 
+                uniform=uniform_lag, split="val", sub_sampling_indices_path=val_indices_path, ot_coupling=ot_coupling, condition_base_std=args.condition_base_std) 
 
         return train_dataset, val_dataset
 
@@ -105,7 +105,8 @@ def get_batch(args, dataset, i_mol):
     batch["corr"] = batch['cond'].clone()
     #base_samples = torch.normal(0, 1, size=batch["cond"].x.shape) #add samples from the base distribution, this could be improved
     #base_samples = center_coordinates_batch(base_samples, batch["cond"].batch) 
-    base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+#     base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+    base_samples = dataset.basedistribution.sample_as(batch["cond"])
     
     batch["corr"].x = base_samples
     
@@ -214,7 +215,8 @@ def build_custom_initial_condition_batch(args, dataset):
     batch = {"cond": cond_batch, "lag": lag_batch}
 
     batch["corr"] = batch['cond'].clone()
-    base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+#     base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+    base_samples = dataset.basedistribution.sample_as(batch["cond"])
     
     batch["corr"].x = base_samples
     

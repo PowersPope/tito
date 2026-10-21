@@ -101,6 +101,7 @@ def build_combined_datasets(args):
                     normalize=True,
                     lazy_load=True,
                     ot_coupling=not args.no_ot,
+                    condition_base_std=args.condition_base_std,
                     )
 
             dataset.uniform = not args.no_uniform_lag
@@ -312,6 +313,8 @@ def main():
     parser.add_argument("--k-meta", type=int, default=3, help="Number of centoids make up the sparse subgraph in --virtual-nodes")
     parser.add_argument("--cluster-ratio", type=float, default=0.3, help="The percentage of centroids to make given N nodes in a graph.")
     parser.add_argument("--virtual-virtual-hop", action="store_true", help="Whether to pass information along virtual-virtual nodes in a 1-hop manner.")
+
+    parser.add_argument("--condition-base-std", type=float, default=0.1, help="Amount of noise used to create our structure-conditioned noised prior.")
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function
