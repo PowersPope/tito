@@ -83,16 +83,16 @@ def build_combined_datasets(args):
         datasets = []
 
         for dataset_class, path, max_lag in (
-                (
-                    LaggedTimewarp,
-                    args.timewarp_path,
-                    args.timewarp_max_lag,
-                ),
-                (
-                    LaggedOctopeptide,
-                    args.octopep_path,
-                    args.octopep_max_lag,
-                ),
+#                 (
+#                     LaggedTimewarp,
+#                     args.timewarp_path,
+#                     args.timewarp_max_lag,
+#                 ),
+#                 (
+#                     LaggedOctopeptide,
+#                     args.octopep_path,
+#                     args.octopep_max_lag,
+#                 ),
                 (
                     LaggedCATH,
                     args.cath_path,
@@ -218,6 +218,12 @@ def train_model(args):
                                         cluster_ratio=args.cluster_ratio, k_meta=args.k_meta,
                                         virtual_to_virtual_hop=args.virtual_virtual_hop)
         cfm = model.CFM(vf, lr=args.learning_rate)
+#         cfm.score.compile(
+#                 backend="inductor",
+#                 mode="reduce-overhead",
+#                 dynamic=True,
+#                 fullgraph=False,
+#                 )
 
     root_dir = Path(__file__).resolve().parents[1]
     wandblogger = get_wandb_logger(args, root_dir, num_workers=num_workers)

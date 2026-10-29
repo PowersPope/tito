@@ -7,6 +7,7 @@ from torch_geometric.data import Batch
 
 import tito.data as data
 import tito.data.octopeptide as octopepdata
+import tito.data.cath as cath1
 from tito.utils.utils import rdkit_to_mdtraj_topology
 import tito.mlops as mlops 
 from tito.utils.utils import sample_to_batch
@@ -18,6 +19,7 @@ def get_dataset(args):
         "mdqm9": data.mdqm9.LaggedMDQM9,
         "timewarp": data.timewarp.LaggedTimewarp,
         "octopep": octopepdata.LaggedOctopeptide,
+        "cath1": cath1.LaggedCATH,
     }
     if args.data_set not in datasets:
         raise ValueError(f"Dataset {args.data_set} not supported. Choose from {list(datasets.keys())}.")
@@ -60,11 +62,13 @@ def get_base_dataset(args):
         "mdqm9": data.mdqm9.MDQM9Base,
         "timewarp": data.timewarp.TimewarpBase,
         "octopep": octopepdata.OctopeptideBase,
+        "cath1": cath1.LaggedCATH,
     }
     paths = {
         "mdqm9": "scripts/preprocessing/storage/MDQM9-nc/",
         "timewarp": "scripts/preprocessing/storage/timewarp/4AA-large/4AA-large.h5",
         "octopep": "scripts/preprocessing/storage/octopep/octopeptide_5ns_phipsi_noderestype_genpreproFrames_medatomtype.h5",
+        "cath1": "scripts/preprocessing/storage/cath1/cath1.h5",
             }
     print("MAKE SURE YOU WANT TO USE octopeptide_5ns_phipsi_noderestype_genpreproFrames_medatomtype.h5!!!")
     if args.data_set not in datasets:

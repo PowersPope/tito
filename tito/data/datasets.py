@@ -29,43 +29,76 @@ class BaseDensity:
 
         #x0 = torch.normal(0, 1, size=batch.x.shape)*self.standard_deviation
 
+# def rot_ot(base, target):
+#     """
+#     Computes the optimal rotation and applies it in place to base, in a torch_geometric batched manner.
+#     :param base: tensor of coordinates, center at origin
+#     :param target: tensor of coordinates, centered at origin
+#     :param batch: tensor of batch indices torch-geometric
+#     :return: A tuple containing the optimal rotation matrix, the optimal
+#              translation vector, and the RMSD.
+#     """
+# 
+#     H = torch.matmul(base[:].transpose(0, 1), target[:])  
+#     U, S, Vt = torch.linalg.svd(H)  
+#     # check if rotation is improper -- if so make it proper
+#     d = torch.det(torch.matmul(Vt.transpose(0, 1), U.transpose(0, 1)))  #
+#     flip = d < 0.0
+#     if flip.any().item():
+#         Vt[flip, -1] *= -1.0
+#     # Optimal rotation
+#     R = torch.matmul(Vt.transpose(0, 1), U.transpose(0, 1))
+#     #rotate noise
+#     base[:] = torch.matmul(base[:], R.transpose(0,1)) 
+#     return base, target
+
 def rot_ot(base, target):
     """
     Computes the optimal rotation and applies it in place to base, in a torch_geometric batched manner.
     :param base: tensor of coordinates, center at origin
     :param target: tensor of coordinates, centered at origin
-    :param batch: tensor of batch indices torch-geometric
-    :return: A tuple containing the optimal rotation matrix, the optimal
-             translation vector, and the RMSD.
+    :return: optimal base rotationed, target
     """
+    u, _, vh = torch.linalg.svd(base.T @ target)
 
-    H = torch.matmul(base[:].transpose(0, 1), target[:])  
-    U, S, Vt = torch.linalg.svd(H)  
-    # check if rotation is improper -- if so make it proper
-    d = torch.det(torch.matmul(Vt.transpose(0, 1), U.transpose(0, 1)))  #
-    flip = d < 0.0
-    if flip.any().item():
-        Vt[flip, -1] *= -1.0
-    # Optimal rotation
-    R = torch.matmul(Vt.transpose(0, 1), U.transpose(0, 1))
-    #rotate noise
-    base[:] = torch.matmul(base[:], R.transpose(0,1)) 
-    return base, target
+    correction = torch.eye(3, dtype=base.dtype, device=base.device)
+    correction[-1, -1] = torch.linalg.det(u @ vh)
 
+    rotation = u @ correction @ vh
+    return base @ rotation, target
+
+# def permute_ot(base, target):
+#     """
+#     Finds optimal permutation and applies it in place to base, in a torch_geometric batched manner.
+#     :param base: tensor of coordinates, center at origin
+#     :param target: tensor of coordinates, centered at origin
+#     :param batch: tensor of batch indices torch-geometric
+#     :return: A tuple containing the optimal rotation matrix, the optimal
+#              translation vector, and the RMSD.
+#     """
+#     cost_matrix = torch.cdist(base, target, p=2).T
+#     #cost_matrix = (base[:].unsqueeze(0) - target[:].unsqueeze(1)).norm(dim=-1)
+#     row_indices, _ = linear_sum_assignment(cost_matrix.cpu().numpy())
+#     base[:] = base[:][row_indices, :]
+#     return base, target
 def permute_ot(base, target):
     """
-    Finds optimal permutation and applies it in place to base, in a torch_geometric batched manner.
+    Finds optimal permutation and applies it in place to base
+    This is a fix to the original permute_OT as it did not actually apply OT. Instead it just kept
+    the same order by reordering by the rows (which is just [0, 1, 2, ..., N-1]). Here we apply the permutation
+    OT correctly to improve straight, non-crossing interpolation paths.
+
     :param base: tensor of coordinates, center at origin
     :param target: tensor of coordinates, centered at origin
-    :param batch: tensor of batch indices torch-geometric
-    :return: A tuple containing the optimal rotation matrix, the optimal
-             translation vector, and the RMSD.
+    :return: base_permuted, target
+             
     """
-    cost_matrix = torch.cdist(base, target, p=2).T
-    #cost_matrix = (base[:].unsqueeze(0) - target[:].unsqueeze(1)).norm(dim=-1)
-    row_indices, _ = linear_sum_assignment(cost_matrix.cpu().numpy())
-    base[:] = base[:][row_indices, :]
-    return base, target
+    cost_matrix = torch.cdist(base, target, p=2).detach().cpu().numpy()
+    row_indices, col_indices = linear_sum_assignment(cost_matrix)
+
+    permutation = torch.empty(len(target), dtype=torch.long, device=base.device)
+    permutation[torch.as_tensor(row_indices, device=base.device)] = torch.as_tensor(col_indices, device=base.device)
+    return base[permutation], target
 
 def OT_coupler(base, target, plan="pr"):
     """

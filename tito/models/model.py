@@ -9,6 +9,8 @@ from tito.models.loss_terms import (
         bond_length_loss, 
         circular_bond_angle_loss,
         circular_backbone_torsion_loss,
+        mean_per_graph,
+        bond_length_loss,
         )
 
 
@@ -74,30 +76,28 @@ class CFM(pl.pytorch.LightningModule):
         rand_eq_node_feats = self.sample_equivariant_features(batch)
         vt = self._forward(t, batch, rand_eq_node_feats) # predict vector field from model
 
-        loss_flow = ((vt - ut).pow(2).sum(dim=-1)).mean()
+        target = batch["target"]
+        n_graphs = target.num_graphs
+
+        atom_error = (vt - ut).pow(2).sum(dim=-1)
+        loss_flow = mean_per_graph(atom_error, target.batch, n_graphs)
 
         x1_pred = x0 + vt
 
-        loss_bond = bond_length_loss(x1_pred, x1, batch["target"].bond_index)
-        loss_angle = circular_bond_angle_loss(x1_pred, x1, batch["target"].angle_index)
-#         loss_torsion, loss_phi, loss_psi = circular_backbone_torsion_loss(
-#                 x1_pred, x1, batch["target"].phi_index, batch["target"].psi_index,
-#                 )
+        loss_bond = bond_length_loss(x1_pred, x1, target.bond_index, target.batch, n_graphs)
+        loss_angle = circular_bond_angle_loss(x1_pred, x1, target.angle_index, target.batch, n_graphs)
 
         loss = (
                 loss_flow
                 + self.lambda_bond * loss_bond
                 + self.lambda_angle * loss_angle
-#                 + self.lambda_torsion * loss_torsion
                 )
         return {"loss": loss, 
                 "flow": loss_flow, 
                 "bond": loss_bond, 
                 "angle": loss_angle,
-#                 "torsion": loss_torsion,
-#                 "phi": loss_phi,
-#                 "psi": loss_psi,
                 }
+
 
 
     def sample_conditional_pt(self, t, x0, x1, batch):
