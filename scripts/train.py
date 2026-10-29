@@ -56,6 +56,12 @@ class CommonTrainingSchema(Dataset):
                                      f"{role} is missing {key}")
                 fields[key] = original[key]
 
+            for key in ("phi_index", "psi_index"):
+                if key in original:
+                    fields[key] = original[key]
+                else:
+                    fields[key] = torch.empty((4,0), dtype=torch.long, device=original.x.device)
+
             if role == "target":
                 if "xbase" not in original:
                     raise ValueError("target is missing xbase")
@@ -217,7 +223,7 @@ def train_model(args):
                                         cutoff=args.radius_cutoff, k=args.k, virtual_clusters=args.virtual_nodes,
                                         cluster_ratio=args.cluster_ratio, k_meta=args.k_meta,
                                         virtual_to_virtual_hop=args.virtual_virtual_hop)
-        cfm = model.CFM(vf, lr=args.learning_rate)
+        cfm = model.CFM(vf, lr=args.learning_rate, lambda_torsion=args.lambda_torsion)
 #         cfm.score.compile(
 #                 backend="inductor",
 #                 mode="reduce-overhead",
@@ -328,6 +334,7 @@ def main():
     parser.add_argument("--k-meta", type=int, default=3, help="Number of centoids make up the sparse subgraph in --virtual-nodes")
     parser.add_argument("--cluster-ratio", type=float, default=0.3, help="The percentage of centroids to make given N nodes in a graph.")
     parser.add_argument("--virtual-virtual-hop", action="store_true", help="Whether to pass information along virtual-virtual nodes in a 1-hop manner.")
+    parser.add_argument("--lambda-torsion", type=float, default=0.0)
 
     args = parser.parse_args()
     args.mode = "train"  #for compatibility with the dataset loading function
