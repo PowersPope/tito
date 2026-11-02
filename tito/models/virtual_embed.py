@@ -65,7 +65,10 @@ class CentroidVirtualMsgPass(Module):
         src, dst = virtual_edges
         num_virtual = virtual_edges.size(1)
 
-        v = self.cluster_to_virtual(torch.cat([h_cluster[src], h_cluster[dst]], dim=-1))
+        v_fwd = self.cluster_to_virtual(torch.cat([h_cluster[src], h_cluster[dst]], dim=-1))
+        v_rev = self.cluster_to_virtual(torch.cat([h_cluster[dst], h_cluster[src]], dim=-1))
+
+        v = 0.5 * (v_fwd + v_rev)
 
         if self.virtual_to_virtual_hop:
             # (E*2, )

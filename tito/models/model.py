@@ -150,7 +150,8 @@ class CFM(pl.pytorch.LightningModule):
                 batch["cond"].x = x0.clone() # update condition with last step
 
                 if i_nested < nested_samples - 1:
-                    x0 = base_distribution.sample_as(batch["cond"].x)
+#                     x0 = base_distribution.sample_as(batch["cond"].x)
+                    x0 = base_distribution.sample_as(batch["cond"])
                     batch["corr"].x = x0.clone()
 
             batch["traj"] = batch["cond"].clone()

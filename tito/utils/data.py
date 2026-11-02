@@ -109,7 +109,8 @@ def get_batch(args, dataset, i_mol):
     batch["corr"] = batch['cond'].clone()
     #base_samples = torch.normal(0, 1, size=batch["cond"].x.shape) #add samples from the base distribution, this could be improved
     #base_samples = center_coordinates_batch(base_samples, batch["cond"].batch) 
-    base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+#     base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+    base_samples = dataset.basedistribution.sample_as(batch["cond"])
     
     batch["corr"].x = base_samples
     
@@ -218,7 +219,8 @@ def build_custom_initial_condition_batch(args, dataset):
     batch = {"cond": cond_batch, "lag": lag_batch}
 
     batch["corr"] = batch['cond'].clone()
-    base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+#     base_samples = dataset.basedistribution.sample_as(batch["cond"].x)
+    base_samples = dataset.basedistribution.sample_as(batch["cond"])
     
     batch["corr"].x = base_samples
     

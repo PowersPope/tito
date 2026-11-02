@@ -97,7 +97,7 @@ def permute_ot(base, target):
     row_indices, col_indices = linear_sum_assignment(cost_matrix)
 
     permutation = torch.empty(len(target), dtype=torch.long, device=base.device)
-    permutation[torch.as_tensor(row_indices, device=base.device)] = torch.as_tensor(col_indices, device=base.device)
+    permutation[torch.as_tensor(col_indices, device=base.device)] = torch.as_tensor(row_indices, device=base.device)
     return base[permutation], target
 
 def OT_coupler(base, target, plan="pr"):
