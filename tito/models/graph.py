@@ -338,6 +338,8 @@ class AddVirtualNodeToConnectClusters(AddEdges):
             batch_idx: Optional[Tensor] = None, 
             ratio: float=0.3,
             get_edges: bool = False,
+            fps_call: bool = False,
+            ca_mask: Optional[Tensor] = None,
             ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Perform FPS to build centroid cluster points -> Build k-NN graphs around the cluster centers
@@ -346,6 +348,10 @@ class AddVirtualNodeToConnectClusters(AddEdges):
         :param batch_idx: (N,) a tensor indicating which graph N_i belongs to
         :param ratio: The ratio of centroids from N nodes.
         :param get_edges: Used to only return edge_index and bond type
+        :param fps: If you want to not use Ca-backbone atoms as then centroid
+            then we will use FPS to determine centroids
+        :param ca_mask: This needs to be supplied if FPS is false. As it will drop all
+            non CA atoms.
 
         :return: 
             cluster_idx (N,)
@@ -354,7 +360,12 @@ class AddVirtualNodeToConnectClusters(AddEdges):
             subgraph_edge_index: (2, E)
         """
         # random_start might be played with but if False then we start with the first node of X
-        centroid_node_idx = fps(x=pos, batch=batch_idx, ratio=ratio, random_start=False)
+        if fps_call:
+            centroid_node_idx = fps(x=pos, batch=batch_idx, ratio=ratio, random_start=False)
+        else:
+            if ca_mask is None:
+                raise ValueError("ca_mask needs to not be None if you are not using FPS!!")
+            centroid_node_idx = torch.where(ca_mask)[0]
         centroid_pos = pos[centroid_node_idx]
         centroid_batch = batch_idx[centroid_node_idx] if batch_idx is not None else None
 
@@ -369,13 +380,56 @@ class AddVirtualNodeToConnectClusters(AddEdges):
             return subgraph_edge_index, bond_type
         return cluster_idx, centroid_pos, centroid_batch, subgraph_edge_index
 
+    def build_batch_all_vs_all(self, centroid_pos: Tensor, centroid_batch: Optional[Tensor]=None, directed: bool = False) -> Tensor:
+        """
+        Build an all-vs-all centroid communication. This is used to send information from all centroids
+        to all other centroids within our input.
+        """
+        n = centroid_pos.size(0)
+
+        if centroid_batch is None:
+            centroid_batch = torch.zeros(
+                    centroid_pos.size(0),
+                    dtype=torch.long,
+                    device=centroid_pos.device,
+                    )
+
+        edges = []
+
+        for graph_id in torch.unique(centroid_batch):
+            ids = torch.where(centroid_batch == graph_id)[0]
+
+            if ids.numel() < 2:
+                continue
+
+            local_pairs = torch.triu_indices(ids.numel(), ids.numel(), offset=1, device=centroid_pos.device)
+            edges.append(ids[local_pairs])
+
+        if not edges:
+            return torch.empty((2,0), dtype=torch.long, device=centroid_pos.device)
+
+        edge_index = torch.cat(edges, dim=1)
+
+        if directed:
+            edge_index = torch.cat([
+                edge_index, edge_index.flip(0)
+                ], dim=1,)
+
+        return edge_index
+
     def build_meta_edges_knn(self, centroid_pos: Tensor, centroid_batch: Optional[Tensor], k_meta: int) -> Tensor:
         """
         Sparse cluster-cluster adjacency via k-NN over centroids.
         This does not guarantee triangular tesselation.
         Though it is fast.
         """
-        ei = knn_graph(centroid_pos, k=k_meta, batch=centroid_batch, loop=False)
+        if k_meta < 0:
+            raise ValueError("k_meta must be nonnegative; 0 means all-vs-all")
+
+        if k_meta == 0:
+            return self.build_batch_all_vs_all(centroid_pos, centroid_batch, directed=False)
+        else:
+            ei = knn_graph(centroid_pos, k=k_meta, batch=centroid_batch, loop=False)
         return self.dedupe_undirected(ei)
 
     def dedupe_undirected(self, edge_index: Tensor) -> Tensor:

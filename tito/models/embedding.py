@@ -212,7 +212,7 @@ class RelativeResidueOffsetEmbedding(device.Module):
 
         if chain_id is not None:
             index = torch.where(
-                    chain_id[src] != chain_id[dist],
+                    chain_id[src] != chain_id[dst],
                     self.inter_chain_index,
                     index,
                     )

@@ -26,6 +26,76 @@ class CFM(pl.pytorch.LightningModule):
         self.lambda_angle = 1.0
         self.lambda_torsion = float(lambda_torsion)
 
+#     def on_before_optimizer_step(self, optimizer):
+#         grads = [
+#                 p.grad.detach()
+#                 for group in optimizer.param_groups
+#                 for p in group["params"]
+#                 if p.grad is not None
+#                 ]
+#         if not grads:
+#             return
+# 
+#         total_norm = torch.stack([g.float().norm(2) for g in grads]).any().float()
+# 
+#         nonfinite = torch.stack([(~torch.isfinite(g)).any() for g in grads]).any().float()
+# 
+#         for name, value in {
+#                 "param_grad_norm_preclip": total_norm,
+#                 "nonfinite_grad": nonfinite,
+#                 }.items():
+#             self.log(
+#                     f"debug/{name}",
+#                     value,
+#                     on_step=True,
+#                     on_epoch=False,
+#                     sync_dist=True,
+#                     reduce_fx="max",
+#                     )
+# 
+#     def _log_loss_diagnostic(self, vt, ut, components):
+#         if not self.training or not torch.is_grad_enabled():
+#             return
+# 
+#         for name, component in components.items():
+#             grad = None
+# 
+#             if component.requires_grad:
+#                 grad, = torch.autograd.grad(
+#                         component, vt,
+#                         retain_graph=True,
+#                         allow_unused=True,
+#                         )
+# 
+#             norm = (
+#                     vt.new_zeros(())
+#                     if grad is None
+#                     else grad.detach().float().norm(2)
+#                     )
+# 
+#             self.log(
+#                     f"debug/output_grad/{name}",
+#                     norm,
+#                     on_step=True,
+#                     on_epoch=False,
+#                     sync_dist=True,
+#                     reduce_fx="max",
+#                     )
+# 
+#         with torch.no_grad():
+#             for name, value in {
+#                     "pred_velocity_max": vt.detach().norm(dim=-1).max(),
+#                     "target_velocity_max": ut.detach().norm(dim=-1).max(),
+#                     }.items():
+#                 self.log(
+#                         f"debug/{name}",
+#                         value,
+#                         on_step=True,
+#                         on_epoch=False,
+#                         sync_dist=True,
+#                         reduce_fx="max",
+#                         )
+
 
     def training_step(self, batch, batch_idx):
         bs = batch['cond'].num_graphs
@@ -35,9 +105,9 @@ class CFM(pl.pytorch.LightningModule):
         self.log("train/loss_flow", losses["flow"], batch_size=bs, sync_dist=True)
         self.log("train/loss_bond", losses["bond"], batch_size=bs, sync_dist=True)
         self.log("train/loss_angle", losses["angle"], batch_size=bs, sync_dist=True)
-        self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
-        self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
-        self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
+#         self.log("train/loss_torsion", losses["torsion"], batch_size=bs, sync_dist=True)
+#         self.log("train/loss_phi", losses["phi"], batch_size=bs, sync_dist=True)
+#         self.log("train/loss_psi", losses["psi"], batch_size=bs, sync_dist=True)
         return losses
     
     def validation_step(self, batch, batch_idx):
@@ -48,9 +118,9 @@ class CFM(pl.pytorch.LightningModule):
         self.log("valid/loss_flow", losses["flow"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_bond", losses["bond"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         self.log("valid/loss_angle", losses["angle"], batch_size=bs, sync_dist=True, on_step=False, on_epoch=True)
-        self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
-        self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
-        self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+#         self.log("valid/loss_torsion", losses["torsion"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+#         self.log("valid/loss_phi", losses["phi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
+#         self.log("valid/loss_psi", losses["psi"], on_step=False, on_epoch=True, batch_size=bs, sync_dist=True)
         return losses
 
     def configure_optimizers(self):
@@ -88,23 +158,32 @@ class CFM(pl.pytorch.LightningModule):
         loss_bond = bond_length_loss(x1_pred, x1, target.bond_index, target.batch, n_graphs)
         loss_angle = circular_bond_angle_loss(x1_pred, x1, target.angle_index, target.batch, n_graphs)
 
-        loss_phi = graph_balanced_torsion_loss(x1_pred, x1, target.phi_index, target.batch, n_graphs)
-        loss_psi = graph_balanced_torsion_loss(x1_pred, x1, target.psi_index, target.batch, n_graphs)
-        loss_torsion = 0.5 * (loss_phi + loss_psi)
+#         loss_phi = graph_balanced_torsion_loss(x1_pred, x1, target.phi_index, target.batch, n_graphs)
+#         loss_psi = graph_balanced_torsion_loss(x1_pred, x1, target.psi_index, target.batch, n_graphs)
+#         loss_torsion = 0.5 * (loss_phi + loss_psi)
 
         loss = (
                 loss_flow
                 + self.lambda_bond * loss_bond
                 + self.lambda_angle * loss_angle
-                + self.lambda_torsion * loss_torsion
+#                 + self.lambda_torsion * loss_torsion
                 )
+
+#         self._log_loss_diagnostic(vt, ut,
+#                                   {
+#                                       "flow": loss_flow,
+#                                       "bond": self.lambda_bond * loss_bond,
+#                                       "angle": self.lambda_angle * loss_angle,
+#                                       "torsion": self.lambda_torsion * loss_torsion,
+#                                       },
+#                                   )
         return {"loss": loss, 
                 "flow": loss_flow, 
                 "bond": loss_bond, 
                 "angle": loss_angle,
-                "torsion": loss_torsion,
-                "phi": loss_phi,
-                "psi": loss_psi,
+#                 "torsion": loss_torsion,
+#                 "phi": loss_phi,
+#                 "psi": loss_psi,
                 }
 
 

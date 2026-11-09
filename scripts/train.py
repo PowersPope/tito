@@ -49,7 +49,14 @@ class CommonTrainingSchema(Dataset):
         for role in ("cond", "target"):
             original = item[role]
 
+            atom_idx = torch.arange(original.x.size(0), device=original.x.device)
+
             fields = {}
+            # This is something to note, as this might not work for the case of a small mol by itself.
+            fields["node_ca_mask"] = (
+                    original.frame_valid.bool()
+                    & (original.frame_atom_index[1] == atom_idx)
+                    )
             for key in self.graph_keys:
                 if key not in original:
                     raise ValueError(f"{type(self.dataset).__name__}: "
@@ -281,6 +288,7 @@ def train_model(args):
         callbacks=callbacks,
         gradient_clip_val=1.0,
         gradient_clip_algorithm="norm",
+#         log_every_n_steps=1,
         
         #profiler=profiler,
     )

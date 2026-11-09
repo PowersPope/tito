@@ -3,6 +3,7 @@ from typing import Callable, Optional
 import torch
 from torch.nn import Sequential, Linear, ReLU, Module, Sigmoid
 from torch import Tensor
+from tito.models.embedding import RadialDistanceEncoder
 from torch_geometric.utils import scatter
 
 class CentroidVirtualMsgPass(Module):
@@ -11,14 +12,17 @@ class CentroidVirtualMsgPass(Module):
             hidden_dim: int,
             k_meta: int = 3,
             virtual_to_virtual_hop: bool = False,
+            distance_scale: float = 10.0,
             ) -> None:
         super().__init__()
         self.k_meta = k_meta
         self.virtual_to_virtual_hop = virtual_to_virtual_hop
+        self.distance_encoder = RadialDistanceEncoder(hidden_dim, max_distance=distance_scale)
 
         # cluster nodes pass to virtual nodes
         self.cluster_to_virtual = Sequential(
-                Linear(2 * hidden_dim, hidden_dim),
+#                 Linear(2 * hidden_dim, hidden_dim),
+                Linear(3 * hidden_dim, hidden_dim),
                 ReLU(),
                 Linear(hidden_dim, hidden_dim),
                 )
@@ -51,6 +55,7 @@ class CentroidVirtualMsgPass(Module):
             h_cluster: Tensor,
             virtual_edges: Tensor,
             cluster_idx: Tensor,
+            centroid_pos: Tensor,
             logger: Optional[Callable] = None) -> Tensor:
         """
         :param x: (N, hidden_dim) node features
@@ -65,8 +70,14 @@ class CentroidVirtualMsgPass(Module):
         src, dst = virtual_edges
         num_virtual = virtual_edges.size(1)
 
-        v_fwd = self.cluster_to_virtual(torch.cat([h_cluster[src], h_cluster[dst]], dim=-1))
-        v_rev = self.cluster_to_virtual(torch.cat([h_cluster[dst], h_cluster[src]], dim=-1))
+        if num_virtual == 0:
+            return x
+
+        distance = torch.linalg.vector_norm(centroid_pos[src] - centroid_pos[dst], dim=-1)
+        distance_features = self.distance_encoder(distance).to(dtype=h_cluster.dtype)
+
+        v_fwd = self.cluster_to_virtual(torch.cat([h_cluster[src], h_cluster[dst], distance_features], dim=-1))
+        v_rev = self.cluster_to_virtual(torch.cat([h_cluster[dst], h_cluster[src], distance_features], dim=-1))
 
         v = 0.5 * (v_fwd + v_rev)
 

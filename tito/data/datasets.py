@@ -10,6 +10,7 @@ import tempfile
 from pathlib import Path
 
 import tito.utils as utils
+from tito.models.utils import center_coordinates_batch
 import torch_geometric as geom
 
 from tito import DEVICE
@@ -21,7 +22,7 @@ class BaseDensity:
     def sample_as(self, batch):
         if isinstance(batch, geom.data.Batch):
             x0 = torch.normal(0, 1, size=batch.x.shape, device=batch.x.device)*self.standard_deviation
-            return utils.center_coordinates_batch(x0, batch.batch)
+            return center_coordinates_batch(x0, batch.batch)
 
         elif isinstance(batch, torch.Tensor):
             x0 = torch.normal(0, 1, size=batch.shape, device=batch.device)*self.standard_deviation 

@@ -111,6 +111,7 @@ class PainnCondVelocity(device.Module):
                     hidden_dim=n_features,
                     k_meta=k_meta,
                     virtual_to_virtual_hop=virtual_to_virtual_hop,
+                    distance_scale=length_scale,
                     )
             self.cluster_builder = graph.AddVirtualNodeToConnectClusters()
 
@@ -161,7 +162,7 @@ class PainnCondVelocity(device.Module):
         if self.virtual_clusters:
             # Cluster grab our information
             cluster_idx, centroid_pos, centroid_batch, _ = self.cluster_builder.build_cluster_points(
-                    pos, cond.batch, self.cluster_ratio)
+                    pos, cond.batch, self.cluster_ratio, False, False, cond.node_ca_mask)
 
             # Add in node spatial information
             cond.cluster_num = cluster_idx
@@ -184,6 +185,7 @@ class PainnCondVelocity(device.Module):
                     h_cluster=h_cluster,
                     virtual_edges=virtual_edges,
                     cluster_idx=cluster_idx,
+                    centroid_pos=centroid_pos,
                     logger=logger,
                     )
         else:
